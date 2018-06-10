@@ -1,0 +1,23 @@
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\Assembly-CSharp-firstpass.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\UnityEngine.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\UnityEngine.UI.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\TDx.TDxInput.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\RedShellSDK.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csprojResolveAssemblyReference.cache
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CopyComplete
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\AnimatedAttachment.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\AnimatedAttachment.pdb
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\AnimatedAttachment.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\AnimatedAttachment.pdb
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\Assembly-CSharp-firstpass.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\UnityEngine.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\UnityEngine.UI.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\TDx.TDxInput.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\bin\Debug\RedShellSDK.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csprojResolveAssemblyReference.cache
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
