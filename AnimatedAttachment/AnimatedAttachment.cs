@@ -9,60 +9,19 @@ public class AnimatedAttachment : PartModule
     [KSPField(isPersistant = true, guiName = "Debug", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
     public bool debugVectors = false;
-    [KSPField(isPersistant = true, guiName = "Maximum force", guiActiveEditor = true)]
-    [UI_FloatRange(minValue = 1f, maxValue = 1000f, stepIncrement = 1f)]
-    public float maximumForce = 1f;
-    [KSPField(isPersistant = true, guiName = "Damper", guiActiveEditor = true)]
+    [KSPField(isPersistant = true, guiName = "Maximum force", guiActiveEditor = true, advancedTweakable = true)]
+    [UI_FloatRange(minValue = 1f, maxValue = 10000f, stepIncrement = 1f)]
+    public float maximumForce = 100f;
+    [KSPField(isPersistant = true, guiName = "Damper", guiActiveEditor = true, advancedTweakable = true)]
     [UI_FloatRange(minValue = 1f, maxValue = 1000f, stepIncrement = 1f )]
     public float positionDamper = 1f;
     [UI_FloatRange(minValue = 1f, maxValue = 1000f, stepIncrement = 1f)]
-    [KSPField(isPersistant = true, guiName = "Spring", guiActiveEditor = true)]
+    [KSPField(isPersistant = true, guiName = "Spring", guiActiveEditor = true, advancedTweakable = true)]
     public float positionSpring = 100f;
-
-    /*
-        internal void OnLoad(ConfigNode node)
-        {
-        Debug.Log("AnimatedAttachment.OnLoad");
-        Debug.Log(node);
-
-        if (node.HasValue("debugVectors"))
-            debugVectors = bool.Parse(node.GetValue("debugVectors"));
-
-        if (node.HasValue("maximumForce"))
-            maximumForce = float.Parse(node.GetValue("maximumForce"));
-
-        if (node.HasValue("positionDamper"))
-            positionDamper = float.Parse(node.GetValue("positionDamper"));
-
-        if (node.HasValue("positionSpring"))
-            positionSpring = float.Parse(node.GetValue("positionSpring"));
-    }
-
-    internal void OnSave(ConfigNode node)
-        {
-            Debug.Log("AnimatedAttachment.OnSave");
-
-            node.SetValue("debugVectors", debugVectors);
-
-            if (!float.IsNaN(maximumForce))
-                node.SetValue("maximumForce", maximumForce);
-
-            if (!float.IsNaN(positionDamper))
-                node.SetValue("positionDamper", positionDamper);
-
-            if (!float.IsNaN(positionSpring))
-                node.SetValue("positionSpring", positionSpring);
-
-            Debug.Log(node);
-        }
-    }
-    */
-
-    //Settings settings = new Settings();
 
     private void Update()
     {
-        UpdateAttachments(true);
+        // Debug.Log("Update()");
     }
 
     private void FixedUpdate()
@@ -72,7 +31,29 @@ public class AnimatedAttachment : PartModule
 
     private void LateUpdate()
     {
-        UpdateAttachments(true);
+    }
+
+    public class PosRot
+    {
+        public Quaternion rotation;
+        public Vector3 position;
+    }
+
+    // Get a rotation from a node in a part relative to the part instead of the immediate parent
+    private PosRot GetPosRot(Transform transform)
+    {
+        PosRot result = new PosRot();
+
+        result.rotation = Quaternion.identity;
+
+        do
+        {
+            result.position = transform.localRotation * result.position + transform.localPosition;
+            result.rotation = transform.localRotation * result.rotation;
+            transform = transform.parent;
+        }
+        while (transform != null && transform != part.transform);
+        return result;
     }
 
     // Contains info on each attached node
@@ -82,19 +63,20 @@ public class AnimatedAttachment : PartModule
 
         public OrientationInfo orientationAttachNode;
         public OrientationInfo orientationJoint;
-        public AxisInfo axisAttachNode;
         public AxisInfo axisJoint;
 
+        public PosRot originalPosRot;
         public Vector3 originalOrientation;
-        public Vector3 originalPosition;
         public Quaternion partRotation;
         public Vector3 partPosition;
     };
 
-    //JointDrive[] jointDriveSettings;
-    AttachNodeInfo[] attachNodeInfos;
+    public AxisInfo axisWorld;
+    public AxisInfo axisAttachNode;
 
     int test;
+    AttachNodeInfo[] attachNodeInfos;
+
     private void UpdateAttachments(bool moving)
     {
         // Save original orientation for each attachNode
@@ -103,168 +85,147 @@ public class AnimatedAttachment : PartModule
             AttachNode attachNode = part.attachNodes[i];
             AttachNodeInfo attachNodeInfo = attachNodeInfos[i];
 
-            if (attachNode.nodeTransform != null)
+            if (attachNode.attachedPart == part.parent)
+                continue;
+
+            if (attachNode.nodeTransform == null)
+                continue;
+
+            Part attachedPart = attachNode.attachedPart;
+            if (attachedPart == null)
             {
-                bool debug = false;
-                if ((test++ % 100) == 0)
-                    debug = true;
+                // Make sure to mark the attachNode as invalid if there is nothing attached to it
+                attachNodeInfo.valid = false;
+                continue;
+            }
 
-                Vector3 localPosition = Vector3.zero;
-                Transform transform = attachNode.nodeTransform;
-                Quaternion localRotation = Quaternion.identity;
-                do
-                {
-                    localPosition = transform.localRotation * localPosition + transform.localPosition;
-                    localRotation = transform.localRotation * localRotation;
+            Transform transform = attachNode.nodeTransform;
+            PosRot posRot = GetPosRot(attachNode.nodeTransform);
 
-                    transform = transform.parent;
-                }
-                while (transform != null && transform != part.transform);
+            // Include the rescale factor
+            posRot.position *= part.rescaleFactor;
 
-                /*
-                localPosition = part.partTransform.rotation.Inverse() * 
-                    (attachNode.nodeTransform.position - part.partTransform.position);
-                */
-
-                // In flight mode, transforms don't have parent, apperently...
-                // Recalculate local positions explicitly based on the parts transforms
-                if (part.transform.parent == null)
-                {
-                    // localPosition = part.transform.TransformPoint(localPosition);
-                    //childRotation = Quaternion.LookRotation(localRotation * Vector3.back, Vector3.up);
-                }
-
-                // Include the rescale factor
-                localPosition *= part.rescaleFactor;
-
-                attachNode.position = localPosition;
-                attachNode.orientation = localRotation * Vector3.forward;
+            if (moving && attachNodeInfo.valid)
+            {
+                attachNode.position = posRot.position;
+                attachNode.orientation = posRot.rotation * Vector3.forward;
 
                 // Rotation and position delta from saved value
-                Quaternion rotation = Quaternion.FromToRotation(attachNodeInfo.originalOrientation, attachNode.orientation);
-                Vector3 position = localPosition - attachNodeInfo.originalPosition;
-                Vector3 partOffset = attachNodeInfo.partPosition - attachNodeInfo.originalPosition;
+                //Quaternion rotation = Quaternion.FromToRotation(attachNodeInfo.originalOrientation, attachNode.orientation);
+                Quaternion rotation = posRot.rotation * attachNodeInfo.originalPosRot.rotation.Inverse();
+                Vector3 position = posRot.position - attachNodeInfo.originalPosRot.position;
+                Vector3 partOffset = attachNodeInfo.partPosition - attachNodeInfo.originalPosRot.position;
 
-                Part attachedPart = attachNode.attachedPart;
-                if (attachedPart != null)
+                Transform parent = attachedPart.partTransform.parent;
+                ConfigurableJoint joint = attachedPart.attachJoint ? attachedPart.attachJoint.Joint : null;
+
+                if (attachedPart.transform.parent != null)
                 {
-                    Transform parent = attachedPart.partTransform.parent;
-                    ConfigurableJoint joint = attachedPart.attachJoint ? attachedPart.attachJoint.Joint : null;
-
-                    if (moving && attachNodeInfo.valid)
-                    {
-                        if (attachedPart.transform.parent != null)
-                        {
-                            attachedPart.transform.localRotation = rotation * attachNodeInfo.partRotation;
-                            attachedPart.transform.localPosition = localPosition - attachedPart.transform.localRotation * attachNode.FindOpposingNode().position;
-                        }
-                        else
-                        { 
-                            // attachedPart.transform.localRotation = (part.transform.rotation * rotation) * attachNodeInfo.partRotation;
-
-                            if (joint != null)
-                            {
-                                joint.xMotion = ConfigurableJointMotion.Free;
-                                joint.yMotion = ConfigurableJointMotion.Free;
-                                joint.zMotion = ConfigurableJointMotion.Free;
-                                joint.angularXMotion = ConfigurableJointMotion.Free;
-                                joint.angularYMotion = ConfigurableJointMotion.Free;
-                                joint.angularZMotion = ConfigurableJointMotion.Free;
-
-
-                                /*int size = 
-                                    attachNode.size < jointDriveSettings.Length ?
-                                    attachNode.size : jointDriveSettings.Length - 1;
-                                JointDrive jointDrive = jointDriveSettings[size];
-                                */
-                                JointDrive jointDrive = new JointDrive();
-
-                                // Overrid default settings from cfg file
-                                if (!float.IsNaN(maximumForce))
-                                    jointDrive.maximumForce = maximumForce;
-                                if (!float.IsNaN(positionDamper))
-                                    jointDrive.positionDamper = positionDamper;
-                                if (!float.IsNaN(positionSpring))
-                                    jointDrive.positionSpring = positionSpring;
-
-                                joint.angularXDrive = jointDrive;
-                                joint.angularYZDrive = jointDrive;
-                                joint.xDrive = jointDrive;
-                                joint.yDrive = jointDrive;
-                                joint.zDrive = jointDrive;
-
-                                joint.SetTargetRotationLocal(rotation * attachNodeInfo.partRotation, attachNodeInfo.partRotation);
-                                joint.connectedAnchor = localPosition;
-
-                                // Debug info
-                                if (debugVectors)
-                                {
-                                    // Show debug vectors for the attachNodes
-                                    if (attachNodeInfo.orientationAttachNode == null)
-                                        attachNodeInfo.orientationAttachNode = new OrientationInfo(part.transform, localPosition, localPosition + attachNodeInfo.originalOrientation);
-                                    attachNodeInfo.orientationAttachNode.Update(localPosition, localPosition + attachNode.orientation);
-
-                                    // Show debug vectors for this part itselft
-                                    if (attachNodeInfo.axisAttachNode == null)
-                                        attachNodeInfo.axisAttachNode = new AxisInfo(part.transform);
-
-                                    // Show debug vectors for the child part
-                                    if (attachNodeInfo.axisJoint == null)
-                                        attachNodeInfo.axisJoint = new AxisInfo(joint.transform);
-                                }
-                                else
-                                {
-                                    if (attachNodeInfo.orientationAttachNode != null)
-                                        attachNodeInfo.orientationAttachNode = null;
-                                    if (attachNodeInfo.axisAttachNode != null)
-                                        attachNodeInfo.axisAttachNode = null;
-                                    if (attachNodeInfo.axisJoint != null)
-                                        attachNodeInfo.axisJoint = null;
-                                }
-                            }
-
-                            if (debug)
-                            {
-                                Debug.Log(string.Format("{0} {1} {2} {3} {4} {5} {6}",
-                                    position,
-                                    rotation,
-                                    attachNodeInfo.partRotation,
-                                    joint.targetRotation,
-                                    attachedPart.transform.rotation,
-                                    joint.angularXDrive.maximumForce,
-                                    joint.currentTorque
-                                    ));
-                            }
-                        }
-                    }
-                    else
-                    {
-                          // On the first iteration after attaching an object or loading a vessel, get
-                        // some reference values to use during animations
-                        attachNodeInfo.originalOrientation = attachNode.orientation;
-                        attachNodeInfo.originalPosition = attachNode.position;
-                        attachNodeInfo.partRotation = attachedPart.transform.localRotation;
-                        attachNodeInfo.partPosition = attachedPart.transform.localPosition;
-                        attachNodeInfo.valid = true;
-                    }
+                    attachedPart.transform.localRotation = rotation * attachNodeInfo.partRotation;
+                    attachedPart.transform.localPosition = posRot.position - attachedPart.transform.localRotation * attachNode.FindOpposingNode().position;
                 }
                 else
-                {
-                    // Make sure to mark the attachNode as invalid if there is nothing attached to it
-                    attachNodeInfo.valid = false;
+                { 
+                    // attachedPart.transform.localRotation = (part.transform.rotation * rotation) * attachNodeInfo.partRotation;
+
+                    if (joint != null)
+                    {
+                        joint.xMotion = ConfigurableJointMotion.Free;
+                        joint.yMotion = ConfigurableJointMotion.Free;
+                        joint.zMotion = ConfigurableJointMotion.Free;
+                        joint.angularXMotion = ConfigurableJointMotion.Free;
+                        joint.angularYMotion = ConfigurableJointMotion.Free;
+                        joint.angularZMotion = ConfigurableJointMotion.Free;
+
+
+                        JointDrive jointDrive = new JointDrive();
+
+                        // Overrid default settings from cfg file
+                        jointDrive.maximumForce = maximumForce;
+                        jointDrive.positionDamper = positionDamper;
+                        jointDrive.positionSpring = positionSpring;
+
+                        joint.angularXDrive = jointDrive;
+                        joint.angularYZDrive = jointDrive;
+                        joint.xDrive = jointDrive;
+                        joint.yDrive = jointDrive;
+                        joint.zDrive = jointDrive;
+
+                        joint.SetTargetRotationLocal(rotation * attachNodeInfo.partRotation, attachNodeInfo.partRotation);
+                        joint.connectedAnchor = posRot.position;
+
+                        // Debug info
+                        if (debugVectors)
+                        {
+                            // Show debug vectors for the child part
+                            if (attachNodeInfo.axisJoint == null)
+                                attachNodeInfo.axisJoint = new AxisInfo(joint.transform);
+                        }
+                        else
+                        {
+                            if (attachNodeInfo.axisJoint != null)
+                                attachNodeInfo.axisJoint = null;
+                        }
+                        if((test++ % 100) == 0)
+                        {
+                            Debug.Log(string.Format("{0} {1} {2} {3} {4} {4}",
+                                attachNodeInfo.originalPosRot.position,
+                                attachNodeInfo.originalPosRot.rotation.eulerAngles,
+                                posRot.position,
+                                posRot.rotation.eulerAngles,
+                                rotation.eulerAngles,
+                                joint.targetRotation.eulerAngles));
+                        }
+                    }
                 }
             }
+            else
+            {
+                // On the first iteration after attaching an object or loading a vessel, get
+                // some reference values to use during animations
+                attachNodeInfo.originalPosRot = posRot;
+                Debug.Log(string.Format("onStart: {0} {1}",
+                    posRot.position,
+                    posRot.rotation));
+
+                attachNodeInfo.originalOrientation = attachNode.orientation;
+                attachNodeInfo.partRotation = attachedPart.transform.localRotation;
+                attachNodeInfo.partPosition = attachedPart.transform.localPosition;
+                attachNodeInfo.valid = true;
+            }
+
+            // Debug info
+            if (debugVectors)
+            {
+                // Show debug vectors for the attachNodes
+                if (attachNodeInfo.orientationAttachNode == null)
+                    attachNodeInfo.orientationAttachNode = new OrientationInfo(part.transform, posRot.position, posRot.position + attachNodeInfo.originalOrientation);
+                attachNodeInfo.orientationAttachNode.Update(posRot.position, posRot.position + attachNode.orientation);
+            }
+            else
+            {
+                if (attachNodeInfo.orientationAttachNode != null)
+                    attachNodeInfo.orientationAttachNode = null;
+            }
+        }
+
+        // Debug info
+        if (debugVectors)
+        {
+            // Show debug vectors for this part itselft
+            if (axisAttachNode == null)
+                axisAttachNode = new AxisInfo(part.transform);
+            if (axisWorld == null)
+                axisWorld = new AxisInfo(null);
+        }
+        else
+        {
+            if (axisAttachNode != null)
+                axisAttachNode = null;
+            if (axisWorld != null)
+                axisWorld = null;
         }
     }
-
-    /*
-    public override void OnSave(ConfigNode node)
-    {
-        base.OnSave(node);
-        foreach(ConstrainedObjectEx objectEx in ObjectsList)
-            objectEx.Save(node.)
-    }
-    */
 
     private void OnEditorAttach()
     {
@@ -307,80 +268,6 @@ public class AnimatedAttachment : PartModule
                 attachNodeInfos[i] = new AttachNodeInfo();
         }
 
-        // Default settings per size
-        /*
-        jointDriveSettings = new JointDrive[5]
-        {
-            new JointDrive(),
-            new JointDrive(),
-            new JointDrive(),
-            new JointDrive(),
-            new JointDrive()
-        };
-        jointDriveSettings[0].maximumForce = 1f;
-        jointDriveSettings[0].positionDamper = 1f;
-        jointDriveSettings[0].positionSpring = 10f;
-        jointDriveSettings[1].maximumForce = 5f;
-        jointDriveSettings[1].positionDamper = 5f;
-        jointDriveSettings[1].positionSpring = 50f;
-        jointDriveSettings[2].maximumForce = 10f;
-        jointDriveSettings[2].positionDamper = 10f;
-        jointDriveSettings[2].positionSpring = 100f;
-        jointDriveSettings[3].maximumForce = 50f;
-        jointDriveSettings[3].positionDamper = 50f;
-        jointDriveSettings[3].positionSpring = 500f;
-        jointDriveSettings[4].maximumForce = 100f;
-        jointDriveSettings[4].positionDamper = 100f;
-        jointDriveSettings[4].positionSpring = 1000f;
-        */
+        UpdateAttachments(false);
     }
-
-    public override void OnLoad(ConfigNode node)
-    {
-        //OnLoad(node);
-    }
-
-    public override void OnSave(ConfigNode node)
-    {
-        //OnSave(node);
-    }
-
-    // The fields of this class will persist from the cfg database to the instanced part.
-    // However, it will instanced by reference - do not save any part-specific info in this
-    // object!
-    /*
-    public class ConstrainedObjectEx : ScriptableObject
-    {
-        // A small class that keeps track of a transform and the weight assigned to that transform
-        public class ConstrainedObjectMover
-        {
-            public double weight;
-            public string transformName;
-        }
-
-        public ConstrainedObjectEx()
-        {
-            movers = new List<ConstrainedObjectMover>();
-        }
-
-        public void Load(ConfigNode node)
-        {
-            targetName = node.GetValue("targetName");
-            moversName = node.GetValue("moversName");
-        }
-
-        public void Save(ConfigNode node)
-        {
-            node.AddValue("targetName", this.targetName);
-            node.AddValue("moversName", this.moversName);
-        }
-
-        public string targetName;
-        public string moversName;
-
-        public List<ConstrainedObjectMover> movers;
-    }
-
-    public new List<ConstrainedObjectEx> ObjectsList;
-    */
 }
