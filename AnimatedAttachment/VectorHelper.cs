@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
-namespace VectorHelper
+namespace VectorHelpers
 {
     // Create a line in a specific reference frame and update it
     public class LineInfo
@@ -20,7 +20,7 @@ namespace VectorHelper
             // Then create renderer itself
             lineRenderer = gameObject.AddComponent<LineRenderer>();
             lineRenderer.transform.parent = parent;
-            
+
             // The line moves along with the space (rather than staying in fixed world coordinates)
             lineRenderer.useWorldSpace = false;
 
@@ -80,5 +80,47 @@ namespace VectorHelper
             y.Update(Vector3.zero, new Vector3(0, 1f, 0));
             z.Update(Vector3.zero, new Vector3(0, 0, 1f));
         }
+    }
+    public class VectorHelper
+    {
+        public static Vector3 StringToVector3(string str)
+        {
+            if (str == null)
+                return Vector3.zero;
+
+            // Remove the parentheses
+            if (str.StartsWith("(") && str.EndsWith(")"))
+                str = str.Substring(1, str.Length - 2);
+
+            // Split the items
+            string[] sArray = str.Split(',');
+
+            // Store as a Vector3
+            return new Vector3(
+                float.Parse(sArray[0]),
+                float.Parse(sArray[1]),
+                float.Parse(sArray[2]));
+        }
+
+        public static Quaternion StringToQuaternion(string str)
+        {
+            // Remove the parentheses
+            if (str.StartsWith("(") && str.EndsWith(")"))
+                str = str.Substring(1, str.Length - 2);
+
+            if (str == null)
+                return Quaternion.identity;
+
+            // Split the items
+            string[] sArray = str.Split(',');
+
+            // Store as a Quaternion
+            return new Quaternion(
+                float.Parse(sArray[0]),
+                float.Parse(sArray[1]),
+                float.Parse(sArray[2]),
+                float.Parse(sArray[3]));
+        }
+
     }
 }

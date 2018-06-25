@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Xml;
 using UnityEngine;
-using VectorHelper;
+using VectorHelpers;
 
 /******************************************************************************
  *
@@ -19,21 +19,21 @@ using VectorHelper;
 
 public class AnimatedAttachment : PartModule
 {
-    [KSPField(isPersistant = false, guiName = "Animated attachments", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
+    [KSPField(isPersistant = false, guiName = "Animated attachments", guiActiveEditor = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
     public bool activated = true;
-    [KSPField(isPersistant = true, guiName = "Debug", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
+    [KSPField(isPersistant = false, guiName = "Debug", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
     public bool debugVectors = false;
     [KSPField(isPersistant = true, guiName = "Maximum force", guiActiveEditor = true, advancedTweakable = true)]
-    [UI_FloatRange(minValue = 1f, maxValue = 10000f, stepIncrement = 1f)]
-    public float maximumForce = 100f;
+    [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
+    public float maximumForce = 10000f;
     [KSPField(isPersistant = true, guiName = "Damper", guiActiveEditor = true, advancedTweakable = true)]
-    [UI_FloatRange(minValue = 1f, maxValue = 1000f, stepIncrement = 1f )]
-    public float positionDamper = 10f;
-    [UI_FloatRange(minValue = 1f, maxValue = 1000f, stepIncrement = 1f)]
+    [UI_FloatRange(minValue = 1f, maxValue = 10000f, stepIncrement = 1f )]
+    public float positionDamper = 1000f;
+    [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
     [KSPField(isPersistant = true, guiName = "Spring", guiActiveEditor = true, advancedTweakable = true)]
-    public float positionSpring = 100f;
+    public float positionSpring = 10000f;
 
     private void Update()
     {
@@ -42,72 +42,32 @@ public class AnimatedAttachment : PartModule
 
     private void FixedUpdate()
     {
-        UpdateState();
         UpdateAttachments();
+        UpdateState();
         UpdateDebugAxes();
-        passCounter++;
     }
 
     private void UpdateState()
     {
         if (!activated)
         {
+            /*
             foreach (AttachNodeInfo attachNodeInfo in attachNodeInfos)
             {
-                attachNodeInfo.attachedPartOriginal = null;
-                attachNodeInfo.attachNodeOriginal = null;
+                attachNodeInfo.attachedPartOffset = null;
             }
+            */
         }
         else
         {
-            //if (flightState == State.INIT)
-            //    flightState = State.STARTED;
+            if (flightState == State.INIT)
+                flightState = State.STARTING;
         }
     }
 
     private void LateUpdate()
     {
     }
-
-    public static Vector3 StringToVector3(string sVector)
-    {
-        if (sVector == null)
-            return Vector3.zero;
-
-        // Remove the parentheses
-        if (sVector.StartsWith("(") && sVector.EndsWith(")"))
-            sVector = sVector.Substring(1, sVector.Length - 2);
-
-        // Split the items
-        string[] sArray = sVector.Split(',');
-
-        // Store as a Vector3
-        return new Vector3(
-            float.Parse(sArray[0]),
-            float.Parse(sArray[1]),
-            float.Parse(sArray[2]));
-    }
-
-    public static Quaternion StringToQuaternion(string sVector)
-    {
-        // Remove the parentheses
-        if (sVector.StartsWith("(") && sVector.EndsWith(")"))
-            sVector = sVector.Substring(1, sVector.Length - 2);
-
-        if (sVector == null)
-            return Quaternion.identity;
-
-        // Split the items
-        string[] sArray = sVector.Split(',');
-
-        // Store as a Quaternion
-        return new Quaternion(
-            float.Parse(sArray[0]),
-            float.Parse(sArray[1]),
-            float.Parse(sArray[2]),
-            float.Parse(sArray[3]));
-    }
-
 
     public class PosRot
     {
@@ -117,7 +77,10 @@ public class AnimatedAttachment : PartModule
 
         public override string ToString()
         {
-            if(orientation != Vector3.zero)
+            if(this == null)
+                return "null";
+
+            if (orientation != Vector3.zero)
                 return string.Format("{0}, {1}, {2}",
                     position,
                     rotation.eulerAngles,
@@ -131,7 +94,7 @@ public class AnimatedAttachment : PartModule
         {
             if (name == null)
                 return;
-            
+
             node.AddValue("name", name);
             node.AddValue("position", position);
             node.AddValue("rotation", rotation);
@@ -143,38 +106,10 @@ public class AnimatedAttachment : PartModule
             if (node == null)
                 return;
 
-            position = StringToVector3(node.GetValue("position"));
-            rotation = StringToQuaternion(node.GetValue("rotation"));
-            orientation = StringToVector3(node.GetValue("orientation"));
+            position = VectorHelper.StringToVector3(node.GetValue("position"));
+            rotation = VectorHelper.StringToQuaternion(node.GetValue("rotation"));
+            orientation = VectorHelper.StringToVector3(node.GetValue("orientation"));
         }
-    }
-
-    // Get a rotation from a node in a part relative to the part instead of the immediate parent
-    private PosRot GetPosRot(Transform transform)
-    {
-        PosRot result = new PosRot
-        {
-            rotation = Quaternion.identity
-        };
-
-        do
-        {
-            // Walk up the tree to the part transform, adding up all the local positions and rotations
-            // to make them relative to the part transform
-            // TODO: add in scaling
-            result.position = transform.localRotation * result.position + transform.localPosition;
-            result.rotation = transform.localRotation * result.rotation;
-            transform = transform.parent;
-        }
-        while (transform != null && transform != part.transform);
-
-        // Update the orientation vector
-        result.orientation = result.rotation* Vector3.forward;
-
-        // Include the rescale factor
-        result.position *= part.rescaleFactor;
-
-        return result;
     }
 
     // During the first two passes after a scene is loaded, connected part positions will
@@ -192,8 +127,6 @@ public class AnimatedAttachment : PartModule
         INIT,
         STARTING,
         STARTED,
-        ENDING,
-        REINIT,
     };
     public State flightState = State.INIT;
 
@@ -201,9 +134,11 @@ public class AnimatedAttachment : PartModule
     public class AttachNodeInfo
     {
         public AttachNode attachNode;
-
+        // Designed position of the attached part from the editor, expressed
+        // as an offset from the attach node
+        public PosRot attachedPartOffset;
+        // Original rotation of an attached part at the start of the scene
         public PosRot attachedPartOriginal;
-        public PosRot attachNodeOriginal;
 
         public LineInfo lineAnchor;
         public LineInfo lineNodeToPart;
@@ -212,49 +147,294 @@ public class AnimatedAttachment : PartModule
         public AxisInfo axisJoint;
         public int counter;
 
-        public AttachNodeInfo(AttachNode attachNode)
+        private AnimatedAttachment animatedAttachment;
+        private JointDrive jointDrive;
+        private bool jointDriveInitialized;
+
+        public AttachNodeInfo(AnimatedAttachment animatedAttachment, AttachNode attachNode)
         {
+            this.animatedAttachment = animatedAttachment;
             this.attachNode = attachNode;
         }
 
         internal void Save(ConfigNode root)
         {
-            Debug.Log("AttachNodeInfo.Save");
-
             ConfigNode attachNodeInfo = root.AddNode("ATTACH_NODE");
-            if (attachNodeOriginal != null)
-                attachNodeOriginal.Save(
+            if (attachedPartOffset != null)
+                attachedPartOffset.Save(
                     attachNode.nodeTransform.name, 
-                    attachNodeInfo.AddNode("NODE"));
-
-            if (attachedPartOriginal != null && attachNode.attachedPart != null)
-                attachedPartOriginal.Save(
-                    attachNode.attachedPart.name,
-                    attachNodeInfo.AddNode("PART"));
+                    attachNodeInfo.AddNode("OFFSET"));
         }
 
         internal void Load(int index, ConfigNode root)
         {
-            Debug.Log("AttachNodeInfo.Load");
-
             ConfigNode attachNodeInfo = root.GetNode("ATTACH_NODE", index);
             if (attachNodeInfo == null)
                 return;
 
-            if (attachNodeOriginal == null)
-                attachNodeOriginal = new PosRot();
-            attachNodeOriginal.Load(attachNodeInfo.GetNode("NODE"));
+            if (!attachNodeInfo.HasNode("OFFSET"))
+                return;
 
-            if (attachedPartOriginal == null)
-                attachedPartOriginal = new PosRot();
-            attachedPartOriginal.Load(attachNodeInfo.GetNode("PART"));
+            if (attachedPartOffset == null)
+                attachedPartOffset = new PosRot();
+
+            attachedPartOffset.Load(attachNodeInfo.GetNode("OFFSET"));
+        }
+
+        // Get a rotation from a node in a part relative to the part instead of the immediate parent
+        public PosRot GetPosRot(Transform transform, Part part)
+        {
+            PosRot result = new PosRot
+            {
+                rotation = Quaternion.identity
+            };
+
+            do
+            {
+                // Walk up the tree to the part transform, adding up all the local positions and rotations
+                // to make them relative to the part transform
+                // TODO: add in scaling
+                result.position = transform.localRotation * result.position + transform.localPosition;
+                result.rotation = transform.localRotation * result.rotation;
+                transform = transform.parent;
+            }
+            while (transform != null && transform != part.transform);
+
+            // Update the orientation vector
+            result.orientation = result.rotation * Vector3.forward;
+
+            // Include the rescale factor
+            result.position *= part.rescaleFactor;
+
+            return result;
+        }
+
+        public void UpdateAttachments(State flightState, bool debugVectors)
+        {
+            // We don't want to mess with the joint attaching this part to its parent.
+            // Also, take of the special case where they are both null, otherwise we
+            if ((attachNode.attachedPart == animatedAttachment.part.parent) &&
+                (animatedAttachment.part.parent != null))
+                return;
+
+            // If this attach node is not based on a transform from the model, then 
+            // there is nothing more we can do about it.
+            if (attachNode.nodeTransform == null)
+                return;
+
+            // For debugging purposes
+            counter++;
+
+            // Get the position and rotation of the node transform relative to the part.
+            // The nodeTransform itself will only contain its positions and rotation 
+            // relative to the immediate parent in the model
+            PosRot attachNodePosRot = GetPosRot(attachNode.nodeTransform, animatedAttachment.part);
+
+            // Update the attachNode
+            attachNode.position = attachNodePosRot.position;
+            attachNode.orientation = attachNodePosRot.orientation;
+
+            // If the is no actual part attached to the attach node, then we can bail out.
+            Part attachedPart = attachNode.attachedPart;
+
+            // Take note of newly attached parts, including at initial ship load
+            if (attachedPart == null || !animatedAttachment.activated)
+            {
+                attachedPartOffset = null;
+                return;
+            }
+            else
+            {
+                if (attachedPartOffset == null)
+                {
+                    attachedPartOffset = new PosRot();
+
+                    Debug.Log("Recording attachedPartOffset");
+
+                    // Get attached parts
+                    attachedPartOffset.rotation =
+                        attachNodePosRot.rotation.Inverse() *
+                        attachNode.attachedPart.transform.localRotation;
+
+                    attachedPartOffset.position =
+                        attachNodePosRot.rotation.Inverse() *
+                        (attachNode.attachedPart.transform.localPosition -
+                        attachNodePosRot.position);
+                }
+            }
+
+            switch (flightState)
+            {
+                // In the first pass, set the local position of the part
+                case State.INIT:
+                    {
+                        if (attachedPart == null)
+                            break;
+
+                        if (attachedPartOriginal == null)
+                        {
+                            attachedPartOriginal = new PosRot();
+                            attachedPartOriginal.rotation = attachNode.attachedPart.transform.localRotation;
+                        }
+                    }
+                    break;
+
+                case State.STARTING:
+                    break;
+
+                // On the third pass, get values of the attach node transform
+                case State.STARTED:
+                    {
+                        // Calculate the attached parts position in the frame of reference of this part
+                        PosRot attachedPartPosRot = new PosRot
+                        {
+                            rotation = attachNodePosRot.rotation * attachedPartOffset.rotation,
+                            position = attachNodePosRot.position + attachNodePosRot.rotation * attachedPartOffset.position
+                        };
+
+                        /* A sub part can either be connected directly by their transform having a parent transform,
+                            * or be connected through a joint. In the first case, the sub part will directly move with
+                            * their parent as their position is in in the reference frame of the parent local space.
+                            * In the latter case, the sub part lacks a parent transform, and the position is in the vessel
+                            * space instead, and parts are held together by forces working through the joints. 
+                            * The first case occurs in two situations. In the VAB editor, all parts are connected by
+                            * parent transforms. And, during flight, a physicsless part will also be connected to the parent
+                            * this way - for example some science parts.
+                            * Joints are used for normal physics based parts during flight.
+                            */
+
+                        if (attachedPart.transform.parent != null)
+                        {
+                            // If a parent was found, we will just update the position of the part directly since no physics is involved
+                            attachedPart.transform.localRotation = attachedPartPosRot.rotation;
+                            attachedPart.transform.localPosition = attachedPartPosRot.position;
+
+                            // There is nothing more to do, so bail out
+                            break;
+                        }
+
+                        // In the editor, while changing action groups, the parent will be null for some reason.
+                        // We can catch that here by making sure there is axists a joint 
+                        if (attachedPart.attachJoint == null)
+                            break;
+
+                        // Things get tricker if the parts are connected by joints. We need to setup the joint
+                        // to apply forces to the sub part.
+                        ConfigurableJoint joint = attachedPart.attachJoint.Joint;
+
+                        // It is not possible to change values of a JointDrive after creation, so we must create a 
+                        // new one and apply it to the joint. Seems we can't only create it at startup either. 
+                        /*
+                        if (!jointDriveInitialized)
+                        {
+                            jointDriveInitialized = true;
+                            Debug.Log("Creating a new drive mode");
+                            Debug.Log(string.Format("maximumForce: {0}", animatedAttachment.maximumForce));
+                            Debug.Log(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
+                            Debug.Log(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
+                            */
+                            // The joint will not respond to changes to targetRotation/Position in locked mode,
+                            // so change it to free in all directions
+                            joint.xMotion = ConfigurableJointMotion.Free;
+                            joint.yMotion = ConfigurableJointMotion.Free;
+                            joint.zMotion = ConfigurableJointMotion.Free;
+                            joint.angularXMotion = ConfigurableJointMotion.Free;
+                            joint.angularYMotion = ConfigurableJointMotion.Free;
+                            joint.angularZMotion = ConfigurableJointMotion.Free;
+
+                            // Create a new joint with settings from the cfg file or user selection
+                            jointDrive.maximumForce = animatedAttachment.maximumForce;
+                            jointDrive.positionDamper = animatedAttachment.positionDamper;
+                            jointDrive.positionSpring = animatedAttachment.positionSpring;
+
+                            // Same drive in all directions.. is there benefits of separating them?
+                            joint.angularXDrive = jointDrive;
+                            joint.angularYZDrive = jointDrive;
+                            joint.xDrive = jointDrive;
+                            joint.yDrive = jointDrive;
+                            joint.zDrive = jointDrive;
+                        //}
+
+                        // Update the joint.targetRotation using this convenience function, since the joint
+                        // reference frame has weird axes. Arguments are current and original rotation.
+                        joint.SetTargetRotationLocal(
+                            attachedPartPosRot.rotation,
+                            attachedPartOriginal.rotation);
+
+                        /* Move the attached part by updating the connectedAnchor instead of the joint.targetPosition.
+                         * This is easier since the anchor is in the reference frame of this part, and we already have the
+                         * position in that reference frame. It also makes sense from the view that since it really is the 
+                         * attachment point of the attached part that is moving. There might be benefits of using the targetPosition
+                         * though, and should be possible to calculate it fairly easily if needed.
+                         */
+                        joint.connectedAnchor = attachNodePosRot.position;
+
+                        // Make sure the target position is zero
+                        joint.targetPosition = Vector3.zero;
+
+                        // This scaling and rotation is to convert to joint space... maybe? 
+                        // Determined by random tinkering and magical as far as I am concerned
+                        joint.anchor = attachedPartOffset.rotation.Inverse() * 
+                            Vector3.Scale(
+                                new Vector3(-1, -1, -1),
+                                attachedPartOffset.position);
+
+                        // Debug info
+                        if (debugVectors)
+                        {
+                            if ((counter % 100) == 0)
+                                Debug.Log(string.Format("{0}; {1}; {2} -> {3}; {4} -> {5}; {6}",
+                                    attachNodePosRot,
+                                    attachedPartPosRot,
+                                    attachedPartOffset,
+                                    attachedPartOriginal.rotation.eulerAngles,
+                                    joint.targetRotation.eulerAngles,
+                                    joint.anchor,
+                                    joint.connectedAnchor
+                                    ));
+
+                            // Show debug vectors for the child part
+                            if (axisJoint == null)
+                                axisJoint = new AxisInfo(joint.transform);
+
+                            if (lineAnchor == null)
+                                lineAnchor = new LineInfo(animatedAttachment.part.transform, Color.cyan);
+                            lineAnchor.Update(Vector3.zero, joint.connectedAnchor);
+
+                            if (lineNodeToPart == null)
+                                lineNodeToPart = new LineInfo(animatedAttachment.part.transform, Color.magenta);
+                            lineNodeToPart.Update(
+                                attachNodePosRot.position,
+                                attachedPartPosRot.position);                                                    
+                        }
+                        else
+                        {
+                            if (axisJoint != null)
+                                axisJoint = null;
+                        }
+                    }
+                    break;
+            }
+
+            // Debug info
+            if (debugVectors)
+            {
+                // Show debug vectors for the attachNodes
+                if (orientationAttachNode == null)
+                    orientationAttachNode = new OrientationInfo(animatedAttachment.part.transform, attachNodePosRot.position, attachNodePosRot.position + attachedPartOffset.orientation);
+                orientationAttachNode.Update(attachNodePosRot.position, attachNodePosRot.position + attachNode.orientation);
+            }
+            else
+            {
+                if (orientationAttachNode != null)
+                    orientationAttachNode = null;
+            }
         }
     };
 
     // For debugging purposes, we want to limit the console output a bit 
     int debugCounter;
-    int passCounter;
-
+    
     // Opotionally show unit vectors of the axes for debugging purposes
     public AxisInfo axisWorld;
     public AxisInfo axisAttachNode;
@@ -262,258 +442,14 @@ public class AnimatedAttachment : PartModule
     // Contains info for all the attach nodes of the part
     AttachNodeInfo[] attachNodeInfos;
 
-    private void UpdateAttachments(int index)
-    {
-        AttachNode attachNode = part.attachNodes[index];
-
-        // We don't want to mess with the joint attaching this part to its parent.
-        // Also, take of the special case where they are both null, otherwise we
-        if ((attachNode.attachedPart == part.parent) && 
-            (part.parent != null))
-            return;
-
-        // If this attach node is not based on a transform from the model, then 
-        // there is nothing more we can do about it.
-        if (attachNode.nodeTransform == null)
-            return;
-
-        AttachNodeInfo attachNodeInfo = attachNodeInfos[index];
-
-        attachNodeInfo.counter++;
-
-        // Get the position and rotation of the node transform relative to the part.
-        // The nodeTransform itself will only contain its positions and rotation 
-        // relative to the immediate parent in the model
-        PosRot posRot = GetPosRot(attachNode.nodeTransform);
-
-        // Update the attachNode
-        attachNode.position = posRot.position;
-        attachNode.orientation = posRot.orientation;
-
-        // If the is no actual part attached to the attach node, then we can bail out.
-        Part attachedPart = attachNode.attachedPart;
-
-        // Take note of newly attached parts, including at initial ship load
-        if (attachedPart == null)
-            attachNodeInfo.attachedPartOriginal = null;
-        else
-        {
-            if (attachNodeInfo.attachedPartOriginal == null)
-            {
-                Debug.Log("Recording attachedPartOriginal");
-
-                attachNodeInfo.attachedPartOriginal = new PosRot();
-                attachNodeInfo.attachedPartOriginal.rotation = attachNode.attachedPart.transform.localRotation;
-                attachNodeInfo.attachedPartOriginal.position = attachNode.attachedPart.transform.localPosition;
-
-                // Make sure to grab a new reference value of the attach node pos/rot
-                attachNodeInfo.attachNodeOriginal = null;
-            }
-        }
-
-        if (attachNodeInfo.counter < 10)
-            Debug.Log(flightState);
-
-        switch (flightState)
-        {
-            // In the first pass, set the local position of the part
-            case State.INIT:
-            case State.STARTING:
-                {
-                    if (passCounter >= 1)
-                        break;
-
-                    Debug.Log(string.Format("State.ENDING: {0} {1}",
-                        attachNodeInfo.attachedPartOriginal,
-                        attachedPart));
-
-                    if (attachNodeInfo.attachedPartOriginal == null)
-                        break;
-
-                    // Rotation and position delta from saved value
-                    PosRot delta = new PosRot
-                    {
-                        rotation = posRot.rotation * attachNodeInfo.attachNodeOriginal.rotation.Inverse(),
-                        position = posRot.position - attachNodeInfo.attachNodeOriginal.position
-                    };
-
-                    // Calculate the attached parts position in the frame of reference of this part
-                    PosRot local = new PosRot
-                    {
-                        rotation = delta.rotation * attachNodeInfo.attachedPartOriginal.rotation,
-                        position = posRot.position + delta.rotation * (attachNodeInfo.attachedPartOriginal.position - attachNodeInfo.attachNodeOriginal.position)
-                    };
-
-                    Debug.Log(string.Format("State.ENDING: {0} {1}",
-                        local.position,
-                        local.rotation));
-
-                    //attachedPart.transform.localRotation = local.rotation;
-                    //attachedPart.transform.localPosition = local.position;
-                }
-                break;
-
-                /*
-            case State.STARTING:
-                Debug.Log(string.Format("State.STARTING: {0} {1}",
-                    attachedPart.transform.localRotation,
-                    attachedPart.transform.localPosition));
-
-                break;
-                */
-
-            // On the third pass, get values of the attach node transform
-            case State.STARTED:
-                {
-                    if (attachNodeInfo.attachNodeOriginal == null)
-                    {
-                        Debug.Log("Recording attachNodeOriginal");
-
-                        // Now we are okey to start animating the attach node and any attached part
-                        attachNodeInfo.attachNodeOriginal = posRot;
-                    }
-
-                    if (attachNodeInfo.attachedPartOriginal == null)
-                        break;
-
-                    // Rotation and position delta from saved value
-                    PosRot delta = new PosRot
-                    {
-                        rotation = posRot.rotation * attachNodeInfo.attachNodeOriginal.rotation.Inverse(),
-                        position = posRot.position - attachNodeInfo.attachNodeOriginal.position
-                    };
-
-                    // Calculate the attached parts position in the frame of reference of this part
-                    PosRot local = new PosRot
-                    {
-                        rotation = delta.rotation * attachNodeInfo.attachedPartOriginal.rotation,
-                        position = posRot.position + delta.rotation * (attachNodeInfo.attachedPartOriginal.position - attachNodeInfo.attachNodeOriginal.position)
-                    };
-
-                    /* A sub part can either be connected directly by their transform having a parent transform,
-                        * or be connected through a joint. In the first case, the sub part will directly move with
-                        * their parent as their position is in in the reference frame of the parent local space.
-                        * In the latter case, the sub part lacks a parent transform, and the position is in the vessel
-                        * space instead, and parts are held together by forces working through the joints. 
-                        * The first case occurs in two situations. In the VAB editor, all parts are connected by
-                        * parent transforms. And, during flight, a physicsless part will also be connected to the parent
-                        * this way - for example some science parts.
-                        * Joints are used for normal physics based parts during flight.
-                        */
-
-                    if (attachedPart.transform.parent != null)
-                    {
-                        // If a parent was found, we will just update the position of the part directly since no physics is involved
-                        attachedPart.transform.localRotation = local.rotation;
-                        attachedPart.transform.localPosition = local.position;
-
-                        // There is nothing more to do, so bail out
-                        break;
-                    }
-
-                    // Things get tricker if the parts are connected by joints. We need to setup the joint
-                    // to apply forces to the sub part.
-                    ConfigurableJoint joint = attachedPart.attachJoint.Joint;
-
-                    // The joint will not respond to changes to targetRotation/Position in locked mode,
-                    // so change it to free in all directions
-                    joint.xMotion = ConfigurableJointMotion.Free;
-                    joint.yMotion = ConfigurableJointMotion.Free;
-                    joint.zMotion = ConfigurableJointMotion.Free;
-                    joint.angularXMotion = ConfigurableJointMotion.Free;
-                    joint.angularYMotion = ConfigurableJointMotion.Free;
-                    joint.angularZMotion = ConfigurableJointMotion.Free;
-
-                    // It is not possible to change values of a JointDrive after creation, so we must create a 
-                    // new one and apply it to the joint. 
-                    // TODO: This should be cached, and only recreated when the settings have changed
-                    JointDrive jointDrive = new JointDrive();
-
-                    // Create a new joint with settings from the cfg file or user selection
-                    jointDrive.maximumForce = maximumForce;
-                    jointDrive.positionDamper = positionDamper;
-                    jointDrive.positionSpring = positionSpring;
-
-                    // Same drive in all directions.. is there benefits of separating them?
-                    joint.angularXDrive = jointDrive;
-                    joint.angularYZDrive = jointDrive;
-                    joint.xDrive = jointDrive;
-                    joint.yDrive = jointDrive;
-                    joint.zDrive = jointDrive;
-
-                    // Update the joint.targetRotation using this convenience function, since the joint
-                    // reference frame has weird axes. Arguments are current and original rotation.
-                    joint.SetTargetRotationLocal(
-                        delta.rotation * attachNodeInfo.attachedPartOriginal.rotation, 
-                        attachNodeInfo.attachedPartOriginal.rotation);
-
-                    // Move the attached part by updating the connectedAnchor instead of the joint.targetPosition.
-                    // This is easier since the anchor is in the reference frame of this part, and we already have the
-                    // position in that reference frame. It also makes sense from the view that since it really is the 
-                    // attachment point of the attached part that is moving. There might be benefits of using the targetPosition
-                    // though, and should be possible to calculate it fairly easily if needed.
-                    //joint.connectedAnchor = local.position;
-                    joint.connectedAnchor = posRot.position;
-
-                    PosRot org = new PosRot();
-                    org.position = attachedPart.orgPos;
-                    org.rotation = attachedPart.orgRot;
-                    if ((attachNodeInfo.counter % 100) == 0)
-                        Debug.Log(string.Format("{0} -> {1}, {2}", posRot, delta, org));
-
-                    // Debug info
-                    if (debugVectors)
-                    {
-                        // Show debug vectors for the child part
-                        /*
-                        if (attachNodeInfo.axisJoint == null)
-                            attachNodeInfo.axisJoint = new AxisInfo(joint.transform);
-                        */
-                        if (attachNodeInfo.lineAnchor == null)
-                            attachNodeInfo.lineAnchor = new LineInfo(part.transform, Color.cyan);
-                        attachNodeInfo.lineAnchor.Update(Vector3.zero, joint.connectedAnchor);
-
-                        if (attachNodeInfo.lineNodeToPart == null)
-                            attachNodeInfo.lineNodeToPart = new LineInfo(part.transform, Color.magenta);
-                        attachNodeInfo.lineNodeToPart.Update(attachNodeInfo.attachNodeOriginal.position, attachNodeInfo.attachedPartOriginal.position);
-
-                        
-                    }
-                    else
-                    {
-                        if (attachNodeInfo.axisJoint != null)
-                            attachNodeInfo.axisJoint = null;
-                    }
-                }
-                break;
-        }
-
-        // Debug info
-        if (debugVectors)
-        {
-            // Show debug vectors for the attachNodes
-            /*
-            if (attachNodeInfo.orientationAttachNode == null)
-                attachNodeInfo.orientationAttachNode = new OrientationInfo(part.transform, posRot.position, posRot.position + attachNodeInfo.attachNodeOriginal.orientation);
-            attachNodeInfo.orientationAttachNode.Update(posRot.position, posRot.position + attachNode.orientation);
-            */
-        }
-        else
-        {
-            if (attachNodeInfo.orientationAttachNode != null)
-                attachNodeInfo.orientationAttachNode = null;
-        }
-    }
-
     private void UpdateAttachments()
     {
         // Bail out if init failed
         if (attachNodeInfos == null)
             return;
 
-        // Save original orientation for each attachNode
         for (int i = 0; i < part.attachNodes.Count; i++)
-            UpdateAttachments(i);
+            attachNodeInfos[i].UpdateAttachments(flightState, debugVectors);
     }
 
     private void UpdateDebugAxes()
@@ -522,12 +458,10 @@ public class AnimatedAttachment : PartModule
         if (debugVectors)
         {
             // Show debug vectors for this part itselft
-            /*
             if (axisAttachNode == null)
                 axisAttachNode = new AxisInfo(part.transform);
             if (axisWorld == null)
                 axisWorld = new AxisInfo(null);
-            */
         }
         else
         {
@@ -549,7 +483,7 @@ public class AnimatedAttachment : PartModule
             for (int i = 0; i < part.attachNodes.Count; i++)
             {
                 AttachNode attachNode = part.attachNodes[i];
-                attachNodeInfos[i] = new AttachNodeInfo(attachNode);
+                attachNodeInfos[i] = new AttachNodeInfo(this, attachNode);
             }
         }
     }
@@ -558,14 +492,10 @@ public class AnimatedAttachment : PartModule
     {
         base.OnStart(state);
 
-        Debug.Log("OnStart");
-        Debug.Log(state);
+        InitAttachNodeList();
 
         flightState = State.INIT;
-        passCounter = 0;
-        InitAttachNodeList();
         UpdateAttachments();
-
         flightState = State.STARTING;
     }
 
@@ -574,9 +504,6 @@ public class AnimatedAttachment : PartModule
         base.OnStartFinished(state);
 
         flightState = State.STARTED;
-
-        Debug.Log("OnStartFinished");
-        Debug.Log(state);
     }
 
     public override void OnSave(ConfigNode node)
@@ -587,25 +514,30 @@ public class AnimatedAttachment : PartModule
             foreach (AttachNodeInfo attachNodInfo in attachNodeInfos)
                 attachNodInfo.Save(node);
 
-        Debug.Log("OnSave");
-        Debug.Log(node);
+        if (debugVectors)
+        {
+            Debug.Log("AnimatedAttachment: OnSave");
+            Debug.Log(node);
+        }
 
-        /*
+        // Save original positions when saving the ship.
+        // Don't do it at the save occuring at initial scene start.
         if (flightState == State.STARTED)
         {
-            Debug.Log("SetOriginalPositions");
-            SetOriginalPositions();
+            //SetOriginalPositions();
             UpdateOriginalPositions();
         }
-        */
     }
 
     public override void OnLoad(ConfigNode node)
     {
         base.OnLoad(node);
 
-        Debug.Log("OnLoad");
-        Debug.Log(node);
+        if (debugVectors)
+        {
+            Debug.Log("AnimatedAttachment: OnLoad");
+            Debug.Log(node);
+        }
 
         InitAttachNodeList();
 
@@ -638,12 +570,6 @@ public class AnimatedAttachment : PartModule
         foreach (Part part in parts)
             part.UpdateOrgPosAndRot(part.localRoot);
     }
-
-    void SetOriginalPositions()
-    {
-        flightState = State.ENDING;
-        UpdateAttachments();
-    }
 }
 
 /* 
@@ -651,44 +577,47 @@ public class AnimatedAttachment : PartModule
  * This is easier handled by a mono behaviour instead of letting part modules react to the
  * same event event multiple times.
  */
-/*
 [KSPAddon(KSPAddon.Startup.FlightAndEditor, false)]
 public class AnimatedAttachmentUpdater : MonoBehaviour
 {
- float timeWarpCurrent;
+    float timeWarpCurrent;
 
- // Retrieve the active vessel and its parts
- List<Part> GetParts()
- {
-     List<Part> parts = null;
+    // Retrieve the active vessel and its parts
+    List<Part> GetParts()
+    {
+        List<Part> parts = null;
 
-     if (FlightGlobals.ActiveVessel)
-         parts = FlightGlobals.ActiveVessel.parts;
-     else
-         parts = EditorLogic.fetch.ship.parts;
+        if (FlightGlobals.ActiveVessel)
+            parts = FlightGlobals.ActiveVessel.parts;
+        else
+            parts = EditorLogic.fetch.ship.parts;
 
-     return parts;
- }
+        return parts;
+    }
 
- void FixedUpdate()
- {
-     if (timeWarpCurrent != TimeWarp.CurrentRate)
-     {
-         if (TimeWarp.CurrentRate != 1 && timeWarpCurrent == 1)
-         {
-             Debug.Log("TimeWarp started");
-             UpdateOriginalPositions();
-         }
-         timeWarpCurrent = TimeWarp.CurrentRate;
-     }
-     UpdateOriginalPositions();
- }
+    // Make sure to update original positions when starting warping time,
+    // since KSP stock will reset the positions to the original positions
+    // at this time.
+    void FixedUpdate()
+    {
+        if (timeWarpCurrent != TimeWarp.CurrentRate)
+        {
+            if (TimeWarp.CurrentRate != 1 && timeWarpCurrent == 1)
+            {
+                Debug.Log("AnimatedAttachment: TimeWarp started");
+                UpdateOriginalPositions();
+            }
+            timeWarpCurrent = TimeWarp.CurrentRate;
+        }
+        UpdateOriginalPositions();
+    }
 
- void UpdateOriginalPositions()
- {
-     List<Part> parts = GetParts();
-     foreach (Part part in parts)
-         part.UpdateOrgPosAndRot(part.localRoot);
- }    
+    // Save all current positions as original positions, so that parts start in the
+    // the correct positions after reloading the vessel.
+    void UpdateOriginalPositions()
+    {
+        List<Part> parts = GetParts();
+        foreach (Part part in parts)
+            part.UpdateOrgPosAndRot(part.localRoot);
+    }    
 }
-*/
