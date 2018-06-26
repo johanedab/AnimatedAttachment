@@ -193,8 +193,7 @@ public class AnimatedAttachment : PartModule
             {
                 // Walk up the tree to the part transform, adding up all the local positions and rotations
                 // to make them relative to the part transform
-                // TODO: add in scaling
-                result.position = transform.localRotation * result.position + transform.localPosition;
+                result.position = transform.localRotation * result.position + Vector3.Scale(transform.parent.localScale, transform.localPosition);
                 result.rotation = transform.localRotation * result.rotation;
                 transform = transform.parent;
             }
@@ -618,6 +617,6 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
     {
         List<Part> parts = GetParts();
         foreach (Part part in parts)
-            part.UpdateOrgPosAndRot(part.localRoot);
+            part.UpdateOrgPosAndRot(part.localRoot);    
     }    
 }
