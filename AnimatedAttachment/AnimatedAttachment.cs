@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ModuleWheels;
+using System;
 using System.Collections.Generic;
 using System.Xml;
 using UnityEngine;
@@ -149,7 +150,6 @@ public class AnimatedAttachment : PartModule
 
         private AnimatedAttachment animatedAttachment;
         private JointDrive jointDrive;
-        private bool jointDriveInitialized;
 
         public AttachNodeInfo(AnimatedAttachment animatedAttachment, AttachNode attachNode)
         {
@@ -219,7 +219,7 @@ public class AnimatedAttachment : PartModule
             // If this attach node is not based on a transform from the model, then 
             // there is nothing more we can do about it.
             if (attachNode.nodeTransform == null)
-                return;
+                    return;
 
             // For debugging purposes
             counter++;
@@ -524,7 +524,7 @@ public class AnimatedAttachment : PartModule
         if (flightState == State.STARTED)
         {
             //SetOriginalPositions();
-            UpdateOriginalPositions();
+            AnimatedAttachmentUpdater.UpdateOriginalPositions();
         }
     }
 
@@ -545,30 +545,6 @@ public class AnimatedAttachment : PartModule
                 attachNodeInfos.IndexOf(attachNodInfo), 
                 node);
     }
-
-    // Retrieve the active vessel and its parts
-    List<Part> GetParts()
-    {
-        List<Part> parts = null;
-
-        if (FlightGlobals.ActiveVessel)
-            parts = FlightGlobals.ActiveVessel.parts;
-        else
-            if(EditorLogic.fetch)
-                parts = EditorLogic.fetch.ship.parts;
-
-        return parts;
-    }
-
-    void UpdateOriginalPositions()
-    {
-        List<Part> parts = GetParts();
-        if (parts == null)
-            return;
-
-        foreach (Part part in parts)
-            part.UpdateOrgPosAndRot(part.localRoot);
-    }
 }
 
 /* 
@@ -579,10 +555,26 @@ public class AnimatedAttachment : PartModule
 [KSPAddon(KSPAddon.Startup.FlightAndEditor, false)]
 public class AnimatedAttachmentUpdater : MonoBehaviour
 {
+    static private AnimatedAttachmentUpdater _this;
     float timeWarpCurrent;
+    private bool wasMoving;
+
+    // Collect info about all the parts in the vessel and their earlier auto strut mode
+    class PartInfo
+    {
+        public Part part;
+        public Part.AutoStrutMode autoStrutMode;
+    }
+
+    PartInfo[] partInfos;
+
+    static public AnimatedAttachmentUpdater GetSingleton()
+    {
+        return _this;
+    }
 
     // Retrieve the active vessel and its parts
-    List<Part> GetParts()
+    public static List<Part> GetParts()
     {
         List<Part> parts = null;
 
@@ -608,15 +600,93 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
             }
             timeWarpCurrent = TimeWarp.CurrentRate;
         }
-        UpdateOriginalPositions();
+
+        UpdateStruts();
+        // UpdateOriginalPositions();
+    }
+
+    private void UpdateStruts()
+    {
+        bool isMoving = AnyAnimationMoving();
+
+        if (isMoving == wasMoving)
+            return;
+        wasMoving = isMoving;
+
+        Debug.Log(isMoving ? "Started moving" : "Stopped moving");
+
+        List<Part> parts = AnimatedAttachmentUpdater.GetParts();
+
+        if (isMoving)
+        {
+            partInfos = new PartInfo[parts.Count];
+
+            // If any part is moving, we need to de-strut any wheels
+            foreach (Part part in parts)
+            {
+                // Ignore parts that don't have struting
+                if (part.autoStrutMode == Part.AutoStrutMode.Off)
+                    continue;
+
+                // Create a record to keep track of the part and the current mode
+                PartInfo partInfo = new PartInfo();
+                partInfos[parts.IndexOf(part)] = partInfo;
+
+                partInfo.part = part;
+                partInfo.autoStrutMode = part.autoStrutMode;
+
+                Debug.Log(string.Format("Changing auto strut of {0} from {1} to {2}",
+                    part.name,
+                    part.autoStrutMode,
+                    Part.AutoStrutMode.Off));
+
+                // Remove the struting
+                part.autoStrutMode = Part.AutoStrutMode.Off;
+                part.ReleaseAutoStruts();
+            }
+        }
+        else
+        {
+            // Go through our list of de-strutted parts and put their original strutting back again
+            foreach(PartInfo partInfo in partInfos)
+            {
+                if (partInfo == null)
+                    continue;
+
+                Debug.Log(string.Format("Changing auto strut of {0} from {1} to {2}",
+                    partInfo.part.name,
+                    partInfo.part.autoStrutMode,
+                    partInfo.autoStrutMode));
+
+                // Bring struty back
+                partInfo.part.autoStrutMode = partInfo.autoStrutMode;
+            }
+        }
     }
 
     // Save all current positions as original positions, so that parts start in the
     // the correct positions after reloading the vessel.
-    void UpdateOriginalPositions()
+    public static void UpdateOriginalPositions()
     {
         List<Part> parts = GetParts();
         foreach (Part part in parts)
             part.UpdateOrgPosAndRot(part.localRoot);    
     }    
+
+    void Awake()
+    {
+        _this = this;
+    }
+
+    // Check if any animation is moving
+    public static bool AnyAnimationMoving()
+    {
+        List<Part> parts = GetParts();
+        foreach (Part part in parts)
+            foreach (PartModule partModule in part.Modules)
+                if (partModule.moduleName == "ModuleAnimateGeneric")
+                    if (((ModuleAnimateGeneric)partModule).aniState == ModuleAnimateGeneric.animationStates.MOVING)
+                        return true;
+        return false;
+    }
 }
