@@ -49,20 +49,15 @@ public class AnimatedAttachment : PartModule
 
     private void Update()
     {
-        // Debug.Log("Update()");
-        bool debugLog = debug && ((counter++ % 100) == 0);
-
-        if (debugLog)
-            printf("FixedUpdate: %s",
-                attachedPartInfos.Count);
-
-        UpdateAttachments(attachedPartInfos, debugLog);
-        UpdateState();
-        UpdateDebugAxes();
     }
 
     private void FixedUpdate()
     {
+        bool debugLog = debug && ((counter++ % 100) == 0);
+
+        UpdateAttachments(attachedPartInfos, debugLog);
+        UpdateState();
+        UpdateDebugAxes();
     }
 
     private void UpdateState()
@@ -152,10 +147,6 @@ public class AnimatedAttachment : PartModule
             attachNodeInfo.AddValue("colliderName", collider ? collider.name : "");
             attachNodeInfo.AddValue("nodeType", nodeType);
 
-            printf("Save: %s %s",
-                attachedPart,
-                attachedPartOffset);
-
             if (attachedPartOffset != null)
                 attachedPartOffset.Save(attachNodeInfo, "offset");
         }
@@ -234,11 +225,13 @@ public class AnimatedAttachment : PartModule
                     break;
                 case AttachNode.NodeType.Stack:
                     if (stackAttachNode == null)
+                    {
                         stackAttachNode = animatedAttachment.part.FindAttachNodeByPart(attachedPart);
 
-                    if(debug)
-                        printf("Setting attach node to %s",
-                            stackAttachNode.id);
+                        if (debug)
+                            printf("Setting attach node to %s",
+                                stackAttachNode.id);
+                    }
                     break;
             }
 
@@ -284,7 +277,7 @@ public class AnimatedAttachment : PartModule
                 {
                     attachedPartOffset = new PosRot();
 
-                    Debug.Log("Recording attachedPartOffset");
+                    printf("Recording attachedPartOffset");
 
                     // Get attached parts
                     attachedPartOffset.rotation =
@@ -370,10 +363,10 @@ public class AnimatedAttachment : PartModule
                         if (!jointDriveInitialized)
                         {
                             jointDriveInitialized = true;
-                            Debug.Log("Creating a new drive mode");
-                            Debug.Log(string.Format("maximumForce: {0}", animatedAttachment.maximumForce));
-                            Debug.Log(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
-                            Debug.Log(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
+                            printff("Creating a new drive mode");
+                            printf(string.Format("maximumForce: {0}", animatedAttachment.maximumForce));
+                            printf(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
+                            printf(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
                             */
                             // The joint will not respond to changes to targetRotation/Position in locked mode,
                             // so change it to free in all directions
@@ -422,7 +415,7 @@ public class AnimatedAttachment : PartModule
                                 attachedPartOffset.position);
 
                         if (debugPeriodic)
-                            Debug.Log(string.Format("{0}; {1}; {2} -> {3}; {4} -> {5}; {6}",
+                            printf("%s; %s; %s -> %s; %s -> %s; %s",
                                 attachNodePosRot,
                                 attachedPartPosRot,
                                 attachedPartOffset,
@@ -430,7 +423,7 @@ public class AnimatedAttachment : PartModule
                                 joint.targetRotation.eulerAngles,
                                 joint.anchor,
                                 joint.connectedAnchor
-                                ));
+                                );
 
                         // Debug info
                         if (debug)
@@ -530,17 +523,17 @@ public class AnimatedAttachment : PartModule
     // Contains info for all the attached sub parts
     List<AttachedPartInfo> attachedPartInfos;
 
-    private void UpdateAttachments(List<AttachedPartInfo> attachedPartInfos, bool debugLog)
+    private void UpdateAttachments(List<AttachedPartInfo> attachedPartInfos, bool debugPeriodic)
     {
         // Bail out if init failed
         if (attachedPartInfos == null)
         {
-            if(debugLog)
+            if(debugPeriodic)
                 print("Empty attach node info list!");
             return;
         }
 
-        if (debugLog)
+        if (debugPeriodic)
             printf("Updating %s/%s parts",
                 attachedPartInfos.Count,
                 part.children.Count);
@@ -549,7 +542,12 @@ public class AnimatedAttachment : PartModule
         {
             // We can't move attach nodes that are positioned in the cfg file
             if (attachNode.nodeTransform == null)
+            {
+                if (debugPeriodic)
+                    printf("Skipping %s since it lacks a node transform",
+                        attachNode.id);
                 continue;
+            }
 
             // Get the position and rotation of the node transform relative to the part.
             // The nodeTransform itself will only contain its positions and rotation 
@@ -558,7 +556,12 @@ public class AnimatedAttachment : PartModule
 
             // We can't animate decoupling shrouds
             if (attachNodePosRot == null)
-                return;
+            {
+                if (debugPeriodic)
+                    printf("Skipping %s since it is a decoupler shroud",
+                        attachNode.id);
+                continue;
+            }
 
             // Update the attachNode
             attachNode.position = attachNodePosRot.position;
@@ -601,11 +604,11 @@ public class AnimatedAttachment : PartModule
                 continue;
             }
 
-            if (debugLog)
+            if (debugPeriodic)
                 printf("Updating child %s [%s]",
                     attachedPartInfo,
                     i);
-            attachedPartInfo.UpdateAttachments(flightState, debug, debugLog);
+            attachedPartInfo.UpdateAttachments(flightState, debug, debugPeriodic);
         }
 
         // Continue deleting surplus entries
@@ -712,10 +715,7 @@ public class AnimatedAttachment : PartModule
         Save(node.AddNode("ATTACHED_PART_INFOS"), attachedPartInfos);
 
         if (debug)
-        {
-            Debug.Log("AnimatedAttachment: OnSave");
-            Debug.Log(node);
-        }
+            printf("Save: %s", node);
 
         // Save original positions when saving the ship.
         // Don't do it at the save occuring at initial scene start.
@@ -728,9 +728,6 @@ public class AnimatedAttachment : PartModule
 
     private void Load(ConfigNode node)
     {
-        //if (debug)
-            printf("Load: %s", node);
-
         if (node == null)
             return;
 
@@ -746,45 +743,9 @@ public class AnimatedAttachment : PartModule
     {
         base.OnLoad(node);
 
-        if (debug)
-        {
-            Debug.Log("AnimatedAttachment: OnLoad");
-            Debug.Log(node);
-        }
-
         InitAttachNodeLists();
 
         Load(node.GetNode("ATTACHED_PART_INFOS"));
-    }
-
-    //LineInfo lineSurfaceAttachment;
-    internal void OnAttachedPart(Part attachedPart)
-    {
-        printf("AnimatedAttachment: attached %s",
-            attachedPart.name);
-
-        AttachedPartInfo newAttachNodeInfo = new AttachedPartInfo(this, attachedPart);
-        attachedPartInfos.Add(newAttachNodeInfo);
-    }
-
-    internal void OnDetachedPart(Part detachedPart)
-    {
-        printf("AnimatedAttachment: detached: %s",
-            detachedPart);
-
-        foreach (AttachedPartInfo attachedPartInfo in attachedPartInfos)
-        {
-            printf("DetachANI: %s %s",
-                attachedPartInfo);
-
-            if (attachedPartInfo.attachedPart == detachedPart)
-            {
-                printf("Detached!");
-
-                attachedPartInfos.Remove(attachedPartInfo);
-                break;
-            }
-        }
     }
 }
 
@@ -846,7 +807,7 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
         {
             if (TimeWarp.CurrentRate != 1 && timeWarpCurrent == 1)
             {
-                Debug.Log("AnimatedAttachment: TimeWarp started");
+                printf("AnimatedAttachment: TimeWarp started");
                 UpdateOriginalPositions();
             }
             timeWarpCurrent = TimeWarp.CurrentRate;
@@ -864,7 +825,7 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
             return;
         wasMoving = isMoving;
 
-        Debug.Log(isMoving ? "Started moving" : "Stopped moving");
+        printf(isMoving ? "Started moving" : "Stopped moving");
 
         List<Part> parts = AnimatedAttachmentUpdater.GetParts();
 
@@ -886,10 +847,10 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
                 partInfo.part = part;
                 partInfo.autoStrutMode = part.autoStrutMode;
 
-                Debug.Log(string.Format("Changing auto strut of {0} from {1} to {2}",
+                printf("Changing auto strut of %s from %s to %s",
                     part.name,
                     part.autoStrutMode,
-                    Part.AutoStrutMode.Off));
+                    Part.AutoStrutMode.Off);
 
                 // Remove the struting
                 part.autoStrutMode = Part.AutoStrutMode.Off;
@@ -904,10 +865,10 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
                 if (partInfo == null)
                     continue;
 
-                Debug.Log(string.Format("Changing auto strut of {0} from {1} to {2}",
+                printf("Changing auto strut of %s from %s to %s",
                     partInfo.part.name,
                     partInfo.part.autoStrutMode,
-                    partInfo.autoStrutMode));
+                    partInfo.autoStrutMode);
 
                 // Bring struty back
                 partInfo.part.autoStrutMode = partInfo.autoStrutMode;
