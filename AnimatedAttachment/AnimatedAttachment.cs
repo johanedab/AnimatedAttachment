@@ -25,7 +25,7 @@ public class AnimatedAttachment : PartModule
     public bool activated = true;
     [KSPField(isPersistant = false, guiName = "Debug", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
-    public bool debugVectors = false;
+    public bool debug = false;
     [KSPField(isPersistant = true, guiName = "Maximum force", guiActiveEditor = true, advancedTweakable = true)]
     [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
     public float maximumForce = 10000f;
@@ -50,21 +50,19 @@ public class AnimatedAttachment : PartModule
     private void Update()
     {
         // Debug.Log("Update()");
+        bool debugLog = debug && ((counter++ % 100) == 0);
+
+        if (debugLog)
+            printf("FixedUpdate: %s",
+                attachedPartInfos.Count);
+
+        UpdateAttachments(attachedPartInfos, debugLog);
+        UpdateState();
+        UpdateDebugAxes();
     }
 
     private void FixedUpdate()
     {
-        bool debugLog = debugVectors && ((counter++ % 100) == 0);
-
-        if(debugLog)
-            printf("FixedUpdate: %s %s", 
-                stackAttachNodeInfos.Count,
-                surfaceAttachNodeInfos.Count);
-
-        UpdateAttachments(stackAttachNodeInfos, debugLog);
-        UpdateAttachments(surfaceAttachNodeInfos, debugLog);
-        UpdateState();
-        UpdateDebugAxes();
     }
 
     private void UpdateState()
@@ -75,56 +73,6 @@ public class AnimatedAttachment : PartModule
 
     private void LateUpdate()
     {
-    }
-
-    public class PosRot
-    {
-        public Quaternion rotation;
-        public Vector3 position;
-        public Vector3 orientation;
-
-        public override string ToString()
-        {
-            if(this == null)
-                return "null";
-
-            if (orientation != Vector3.zero)
-                return string.Format("{0}, {1}, {2}",
-                    position,
-                    rotation.eulerAngles,
-                    orientation);
-            return string.Format("{0}, {1}",
-                position,
-                rotation.eulerAngles);
-        }
-
-        public void Save(ConfigNode root, string name)
-        {
-            ConfigNode node = root.AddNode("POS_ROT");
-
-            node.AddValue("name", name);
-            node.AddValue("position", position);
-            node.AddValue("rotation", rotation);
-            node.AddValue("orientation", orientation);
-        }
-
-        public void Load(ConfigNode root, string name)
-        {
-            if (root == null)
-                return;
-
-            ConfigNode node = root.GetNode("POS_ROT");
-
-            if (node == null)
-                return;
-
-            if (node.GetValue("name") != "offset")
-                return;
-
-            position = VectorHelper.StringToVector3(node.GetValue("position"));
-            rotation = VectorHelper.StringToQuaternion(node.GetValue("rotation"));
-            orientation = VectorHelper.StringToVector3(node.GetValue("orientation"));
-        }
     }
 
     // During the first two passes after a scene is loaded, connected part positions will
@@ -146,9 +94,12 @@ public class AnimatedAttachment : PartModule
     public State flightState = State.INIT;
 
     // Contains info on each attached node
-    public class AttachNodeInfo
+    public class AttachedPartInfo
     {
-        public AttachNode attachNode;
+        private AttachNode.NodeType nodeType;
+        public AttachNode stackAttachNode;
+        internal Part attachedPart;
+
         // Designed position of the attached part from the editor, expressed
         // as an offset from the attach node
         public PosRot attachedPartOffset;
@@ -164,35 +115,29 @@ public class AnimatedAttachment : PartModule
 
         private AnimatedAttachment animatedAttachment;
         private JointDrive jointDrive;
+        internal bool loaded;
 
-        public AttachNodeInfo(AnimatedAttachment animatedAttachment, AttachNode attachNode, Collider collider)
+        public AttachedPartInfo(AnimatedAttachment animatedAttachment, Part attachedPart)
         {
             this.animatedAttachment = animatedAttachment;
-            this.attachNode = attachNode;
-            this.collider = collider;
+            this.attachedPart = attachedPart;
+
+            AttachNode.NodeType nodeType = AttachNode.NodeType.Stack;
+            if (attachedPart && attachedPart.srfAttachNode.attachedPart)
+                nodeType = AttachNode.NodeType.Surface;
+            this.nodeType = nodeType;
         }
 
         private Transform GetReferenceTransform()
         {
-            switch (attachNode.nodeType)
+            switch (nodeType)
             {
                 case AttachNode.NodeType.Stack:
-                    return attachNode.nodeTransform;
+                    return stackAttachNode.nodeTransform;
+
                 case AttachNode.NodeType.Surface:
                     return collider.transform;
-                default:
-                    throw new NotImplementedException();
-            }
-        }
 
-        private Part GetAttachedPart()
-        {
-            switch (attachNode.nodeType)
-            {
-                case AttachNode.NodeType.Stack:
-                    return attachNode.attachedPart;
-                case AttachNode.NodeType.Surface:
-                    return attachNode.owner;
                 default:
                     throw new NotImplementedException();
             }
@@ -202,8 +147,14 @@ public class AnimatedAttachment : PartModule
         {
             ConfigNode attachNodeInfo = root.AddNode("ATTACH_NODE_INFO");
 
-            attachNodeInfo.AddValue("name", GetReferenceTransform().name);
-            attachNodeInfo.AddValue("nodeType", attachNode.nodeType);          
+            //attachNodeInfo.AddValue("name", GetReferenceTransform().name);
+            //attachNodeInfo.AddValue("attachedPart", attachedPart.name);
+            attachNodeInfo.AddValue("colliderName", collider ? collider.name : "");
+            attachNodeInfo.AddValue("nodeType", nodeType);
+
+            printf("Save: %s %s",
+                attachedPart,
+                attachedPartOffset);
 
             if (attachedPartOffset != null)
                 attachedPartOffset.Save(attachNodeInfo, "offset");
@@ -211,30 +162,32 @@ public class AnimatedAttachment : PartModule
 
         internal void Load(int index, ConfigNode root)
         {
+            printf("Load [%s]", index);
+
             ConfigNode attachNodeInfo = root.GetNode("ATTACH_NODE_INFO", index);
             if (attachNodeInfo == null)
+            {
+                printf("Failed to find ATTACH_NODE_INFO!");
                 return;
+            }
+
+            loaded = true;
 
             if (!attachNodeInfo.HasNode("POS_ROT"))
-                return;
-
-            string name = attachNodeInfo.GetValue("name");
-
-            AttachNode.NodeType nodeType = (AttachNode.NodeType)Enum.Parse(typeof(AttachNode.NodeType), attachNodeInfo.GetValue("nodeType"));
-            switch (nodeType)
             {
-                case AttachNode.NodeType.Stack:
-                    break;
-                case AttachNode.NodeType.Surface:
-                    Collider[] colliders = animatedAttachment.part.GetPartColliders();
-                    foreach (Collider collider in colliders)
-                        if (collider.name == name)
-                        {
-                            this.collider = collider;
-                            break;
-                        }
-                    break;
+                printf("Failed to find POS_ROT!");
+                return;
             }
+
+            //string attachedPartName = attachNodeInfo.GetValue("attachedPart");
+            string colliderName = attachNodeInfo.GetValue("colliderName");
+            Collider[] colliders = animatedAttachment.part.GetPartColliders();
+
+            foreach (Collider collider in colliders)
+                if (collider.name == colliderName)
+                    this.collider = collider; 
+
+            nodeType = (AttachNode.NodeType)Enum.Parse(typeof(AttachNode.NodeType), attachNodeInfo.GetValue("nodeType"));
 
             if (attachedPartOffset == null)
                 attachedPartOffset = new PosRot();
@@ -242,50 +195,17 @@ public class AnimatedAttachment : PartModule
             attachedPartOffset.Load(attachNodeInfo, "offset");
         }
 
-        // Get a rotation from a node in a part relative to the part instead of the immediate parent
-        public PosRot GetPosRot(Transform transform, Part part)
-        {
-            PosRot result = new PosRot
-            {
-                rotation = Quaternion.identity
-            };
-
-            do
-            {
-                // Use the scaling from the parent, if there is one.
-                // The only known situation where we will not have a parent
-                // is if the transform is a jettisonable transform that has
-                // its parent set to the decoupler part.
-                if (transform.parent == null)
-                    return null;
-
-                // Walk up the tree to the part transform, adding up all the local positions and rotations
-                // to make them relative to the part transform
-                result.position = transform.localRotation * result.position + Vector3.Scale(transform.parent.localScale, transform.localPosition);
-                result.rotation = transform.localRotation * result.rotation;
-
-                transform = transform.parent;
-            }
-            while (transform != null && transform != part.transform);
-
-            // Update the orientation vector
-            result.orientation = result.rotation * Vector3.forward;
-
-            // Include the rescale factor
-            result.position *= part.rescaleFactor;
-
-            return result;
-        }
-
-        public void UpdateAttachments(State flightState, bool debugVectors, bool debugLog)
+        public void UpdateAttachments(State flightState, bool debug, bool debugPeriodic)
         {
             // If the is no actual part attached to the attach node, then we can bail out.
-            Part attachedPart = GetAttachedPart();
+            // Part attachedPart = GetAttachedPart();
 
-            if (debugLog)
-                printf("UA: %s", 
-                    attachNode.id,
-                    attachedPart);
+            if (debugPeriodic)
+                printf("UA: %s %s %s",
+                    attachedPart != null ? attachedPart.name : null,
+                    nodeType,
+                    stackAttachNode != null ? stackAttachNode.id : "null",
+                    stackAttachNode != null ? stackAttachNode.attachedPartId.ToString() : "null");
 
             // We don't want to mess with the joint attaching this part to its parent.
             // Also, take of the special case where they are both null, otherwise we
@@ -294,40 +214,61 @@ public class AnimatedAttachment : PartModule
             if ((attachedPart == animatedAttachment.part.parent) &&
                 (attachedPart != null))
             {
-                if (debugLog)
+                if (debugPeriodic)
                     printf("Skipping parent");
 
                 return;
             }
 
-            // If this attach node is not based on a transform from the model, then 
-            // there is nothing more we can do about it. Or is there? =)
+            switch (nodeType)
+            {
+                case AttachNode.NodeType.Surface:
+                    if (collider == null)
+                    {
+                        SetCollider();
+
+                        if(debug)
+                            printf("Setting collider to %s",
+                                collider.name);
+                    }
+                    break;
+                case AttachNode.NodeType.Stack:
+                    if (stackAttachNode == null)
+                        stackAttachNode = animatedAttachment.part.FindAttachNodeByPart(attachedPart);
+
+                    if(debug)
+                        printf("Setting attach node to %s",
+                            stackAttachNode.id);
+                    break;
+            }
+
             Transform referenceTransform = GetReferenceTransform();
+
+            // If this attach node is defined in the cfg, then bail out now, it will not be movable
+            if (referenceTransform == null)
+            {
+                if (debugPeriodic)
+                    printf("Skipping cfg based node: %s", stackAttachNode.id);
+                return;
+            }
 
             // Get the position and rotation of the node transform relative to the part.
             // The nodeTransform itself will only contain its positions and rotation 
             // relative to the immediate parent in the model
-            PosRot attachNodePosRot = GetPosRot(referenceTransform, animatedAttachment.part);
+            PosRot attachNodePosRot = PosRot.GetPosRot(referenceTransform, animatedAttachment.part);
 
             // We can't animate decoupling shrouds
             if (attachNodePosRot == null)
             {
-                if (debugLog)
+                if (debugPeriodic)
                     printf("Skipping decoupler shroud");
                 return;
-            }
-
-            // Update the attachNode
-            if (attachNode.nodeType == AttachNode.NodeType.Stack)
-            {
-                attachNode.position = attachNodePosRot.position;
-                attachNode.orientation = attachNodePosRot.orientation;
             }
 
             // Take note of newly attached parts, including at initial ship load
             if (attachedPart == null || !animatedAttachment.activated)
             {
-                if (debugLog)
+                if (debugPeriodic)
                     if (attachedPart == null)
                         printf("No part attached");
 
@@ -336,6 +277,9 @@ public class AnimatedAttachment : PartModule
             }
             else
             {
+                if(debug)
+                    printf("attachedPartOffset: %s", attachedPartOffset);
+
                 if (attachedPartOffset == null)
                 {
                     attachedPartOffset = new PosRot();
@@ -400,7 +344,7 @@ public class AnimatedAttachment : PartModule
                             attachedPart.transform.localRotation = attachedPartPosRot.rotation;
                             attachedPart.transform.localPosition = attachedPartPosRot.position;
 
-                            if (debugLog)
+                            if (debugPeriodic)
                                 printf("Updated pos without physics");
 
                             // There is nothing more to do, so bail out
@@ -411,7 +355,7 @@ public class AnimatedAttachment : PartModule
                         // We can catch that here by making sure there is axists a joint 
                         if (attachedPart.attachJoint == null)
                         {
-                            if (debugLog)
+                            if (debugPeriodic)
                                 printf("No attach joint found");
                             break;
                         }
@@ -477,20 +421,20 @@ public class AnimatedAttachment : PartModule
                                 new Vector3(-1, -1, -1),
                                 attachedPartOffset.position);
 
-                        // Debug info
-                        if (debugVectors)
-                        {
-                            if (debugLog)
-                                Debug.Log(string.Format("{0}; {1}; {2} -> {3}; {4} -> {5}; {6}",
-                                    attachNodePosRot,
-                                    attachedPartPosRot,
-                                    attachedPartOffset,
-                                    attachedPartOriginal.rotation.eulerAngles,
-                                    joint.targetRotation.eulerAngles,
-                                    joint.anchor,
-                                    joint.connectedAnchor
-                                    ));
+                        if (debugPeriodic)
+                            Debug.Log(string.Format("{0}; {1}; {2} -> {3}; {4} -> {5}; {6}",
+                                attachNodePosRot,
+                                attachedPartPosRot,
+                                attachedPartOffset,
+                                attachedPartOriginal.rotation.eulerAngles,
+                                joint.targetRotation.eulerAngles,
+                                joint.anchor,
+                                joint.connectedAnchor
+                                ));
 
+                        // Debug info
+                        if (debug)
+                        {
                             // Show debug vectors for the child part
                             if (axisJoint == null)
                                 axisJoint = new AxisInfo(joint.transform);
@@ -515,12 +459,14 @@ public class AnimatedAttachment : PartModule
             }
 
             // Debug info
-            if (debugVectors)
+            if (debug)
             {
                 // Show debug vectors for the attachNodes
                 if (orientationAttachNode == null)
                     orientationAttachNode = new OrientationInfo(animatedAttachment.part.transform, attachNodePosRot.position, attachNodePosRot.position + attachedPartOffset.orientation);
-                orientationAttachNode.Update(attachNodePosRot.position, attachNodePosRot.position + attachNode.orientation);
+
+                if(stackAttachNode != null)
+                    orientationAttachNode.Update(attachNodePosRot.position, attachNodePosRot.position + stackAttachNode.orientation);
             }
             else
             {
@@ -528,7 +474,51 @@ public class AnimatedAttachment : PartModule
                     orientationAttachNode = null;
             }
         }
-    };
+
+        private void SetCollider()
+        {
+            Collider[] colliders = animatedAttachment.part.GetPartColliders();
+
+            float bestDistance = 99999.0f;
+            Collider bestCollider = null;
+
+            foreach (Collider collider in colliders)
+            {
+                Vector3 attachPosition = attachedPart.transform.TransformPoint(attachedPart.srfAttachNode.position);
+                Vector3 closestPoint = collider.ClosestPoint(attachPosition);
+
+                /*
+                 According to the unity doc, if the attachPosition is inside the collider,
+                 then the input point should be returned by ClosestPoint. Which makes sense. 
+                 But, it seems that actually the position of the collider is returned instead. 
+                 In this case, move the closest point to the attach position manually instead.
+                 */
+                if (closestPoint == collider.transform.position)
+                    closestPoint = attachPosition;
+
+                float distance = Vector3.Distance(closestPoint, attachPosition);
+
+                if(animatedAttachment.debug)
+                    printf("Collider %s: %s + %s = %s, %s, %sm",
+                        collider.transform.position,
+                        attachedPart.transform.localPosition,
+                        attachedPart.srfAttachNode.position,
+                        attachPosition,
+                        closestPoint,
+                        distance);
+
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestCollider = collider;
+
+                    if (distance == 0)
+                        break;
+                }
+            }
+            collider = bestCollider;
+        }
+    }
 
     // For debugging purposes, we want to limit the console output a bit 
     int debugCounter;
@@ -537,14 +527,13 @@ public class AnimatedAttachment : PartModule
     public AxisInfo axisWorld;
     public AxisInfo axisAttachNode;
 
-    // Contains info for all the attach nodes of the part
-    List<AttachNodeInfo> stackAttachNodeInfos;
-    List<AttachNodeInfo> surfaceAttachNodeInfos;
+    // Contains info for all the attached sub parts
+    List<AttachedPartInfo> attachedPartInfos;
 
-    private void UpdateAttachments(List<AttachNodeInfo> attachNodeInfos, bool debugLog)
+    private void UpdateAttachments(List<AttachedPartInfo> attachedPartInfos, bool debugLog)
     {
         // Bail out if init failed
-        if (attachNodeInfos == null)
+        if (attachedPartInfos == null)
         {
             if(debugLog)
                 print("Empty attach node info list!");
@@ -552,18 +541,88 @@ public class AnimatedAttachment : PartModule
         }
 
         if (debugLog)
-            printf("Updating %s nodes in %s",
-                attachNodeInfos.Count,
-                attachNodeInfos);
+            printf("Updating %s/%s parts",
+                attachedPartInfos.Count,
+                part.children.Count);
 
-        for (int i = 0; i < attachNodeInfos.Count; i++)
-            attachNodeInfos[i].UpdateAttachments(flightState, debugVectors, debugLog);
+        foreach (AttachNode attachNode in part.attachNodes)
+        {
+            // We can't move attach nodes that are positioned in the cfg file
+            if (attachNode.nodeTransform == null)
+                continue;
+
+            // Get the position and rotation of the node transform relative to the part.
+            // The nodeTransform itself will only contain its positions and rotation 
+            // relative to the immediate parent in the model
+            PosRot attachNodePosRot = PosRot.GetPosRot(attachNode.nodeTransform, part);
+
+            // We can't animate decoupling shrouds
+            if (attachNodePosRot == null)
+                return;
+
+            // Update the attachNode
+            attachNode.position = attachNodePosRot.position;
+            attachNode.orientation = attachNodePosRot.orientation;
+        }
+
+        for (int i=0; i < part.children.Count; i++)
+        {
+            Part child = part.children[i];
+            // Create new entries in the list if needed
+            if (i >= attachedPartInfos.Count)
+            {
+                printf("Adding child %s [%s]",
+                    child.name,
+                    i);
+
+                attachedPartInfos.Add(new AttachedPartInfo(this, child));
+            }
+
+            AttachedPartInfo attachedPartInfo = attachedPartInfos[i];
+            // Assign parts to info structs newly loaded from a save file
+            if (attachedPartInfo.loaded)
+            {
+                attachedPartInfo.attachedPart = child;
+                attachedPartInfo.loaded = false;
+
+                printf("Assigning child %s [%s]",
+                    attachedPartInfo.attachedPart,
+                    i);
+            }
+            else
+            // Remove stale entries
+            if (attachedPartInfo.attachedPart != child)
+            {
+                printf("Deleting child %s/%s",
+                    attachedPartInfo.attachedPart,
+                    child.name);
+                attachedPartInfos.Remove(attachedPartInfo);
+                i--;
+                continue;
+            }
+
+            if (debugLog)
+                printf("Updating child %s [%s]",
+                    attachedPartInfo,
+                    i);
+            attachedPartInfo.UpdateAttachments(flightState, debug, debugLog);
+        }
+
+        // Continue deleting surplus entries
+        while (attachedPartInfos.Count > part.children.Count)
+        {
+            AttachedPartInfo attachedPartInfo = attachedPartInfos[part.children.Count];
+            printf("Deleting child %s [%s]",
+                attachedPartInfo.attachedPart,
+                part.children.Count);
+            attachedPartInfos.Remove(attachedPartInfo);
+        }
     }
 
     private void UpdateDebugAxes()
     {
         // Debug info
-        if (debugVectors)
+        if (debug)
         {
             // Show debug vectors for this part itselft
             if (axisAttachNode == null)
@@ -583,29 +642,14 @@ public class AnimatedAttachment : PartModule
 
     private void InitAttachNodeLists()
     {
-        if (stackAttachNodeInfos == null)
+        printf("InitAttachNodeLists: %s %s",
+            attachedPartInfos,
+            part.children.Count);
+
+        if (attachedPartInfos == null)
         {
             // Set up our array containing info about each attach node and their connected parts
-            stackAttachNodeInfos = new List<AttachNodeInfo>(part.attachNodes.Count);
-
-            for (int i = 0; i < part.attachNodes.Count; i++)
-            {
-                AttachNode attachNode = part.attachNodes[i];
-                stackAttachNodeInfos.Add(new AttachNodeInfo(this, attachNode, null));
-            }
-        }
-
-        if (surfaceAttachNodeInfos == null)
-        {
-            surfaceAttachNodeInfos = new List<AttachNodeInfo>();
-            printf("childs: %s", part.children.Count);
-
-            foreach (Part child in part.children)
-            {
-                printf("child: %s", child.srfAttachNode.attachedPart);
-                if (child.srfAttachNode.attachedPart != null)
-                    surfaceAttachNodeInfos.Add(new AttachNodeInfo(this, child.srfAttachNode, null));
-            }
+            attachedPartInfos = new List<AttachedPartInfo>();
         }
     }
 
@@ -613,114 +657,32 @@ public class AnimatedAttachment : PartModule
     {
         base.OnStart(state);
 
+        RemoveNoAttach();
+
         InitAttachNodeLists();
 
         flightState = State.INIT;
-        UpdateAttachments(stackAttachNodeInfos, true);
-        UpdateAttachments(surfaceAttachNodeInfos, true);
+        UpdateAttachments(attachedPartInfos, true);
         flightState = State.STARTING;
-
-        printf("childss: %s", part.children.Count);
-
-        int i = 0;
-        foreach (Part child in part.children)
-        {
-            printf("child: %s", child.srfAttachNode.attachedPart);
-            if (child.srfAttachNode.attachedPart != null)
-                surfaceAttachNodeInfos[i++].attachNode= child.srfAttachNode;
-        }
-
-        if (HighLogic.LoadedSceneIsEditor && part != null)
-            GameEvents.onEditorPartEvent.Add(OnEditorPartEvent);
     }
 
-    private void OnEditorPartEvent(ConstructionEventType constructionEventType, Part editorPart)
+    private void RemoveNoAttach()
     {
-        if (part == null)
-            return;
+        Collider[] colliders = part.GetPartColliders();
 
-        switch (constructionEventType)
+        foreach (Collider collider in colliders)
         {
-            case ConstructionEventType.PartDetached:
-            case ConstructionEventType.PartDeleted:
-                {
-                    OnSurfaceDetachedPart(editorPart);
-                }
-                break;
+            if (collider.tag == "NoAttach")
+            {
+                /*
+                printf("AnimatedAttachment: Removing tag %s from collider %s in part %s",
+                    collider.tag,
+                    collider.name,
+                    part.name);
+                */
 
-            case ConstructionEventType.PartAttached:
-                {
-                    Part parent = editorPart.parent;
-
-                    if (parent == null)
-                    {
-                        Debug.Log("OnEditorPartEvent: parent is null!");
-                        break;
-                    }
-
-                    if (parent != part)
-                    {
-                        Debug.Log("OnEditorPartEvent: not attached to this part (!");
-                        break;
-                    }
-
-                    if (editorPart.srfAttachNode.attachedPart == null)
-                    {
-                        Debug.Log("OnEditorPartEvent: not surface attached!");
-                        break;
-                    }
-
-                    Debug.Log("OnEditorPartEvent: found a candidate!");
-
-                    Collider[] colliders = parent.GetPartColliders();
-
-                    if (colliders == null)
-                    {
-                        Debug.Log("OnEditorPartEvent: colliders is null");
-                        break;
-                    }
-
-                    float bestDistance = 99999.0f;
-                    Collider bestCollider = null;
-
-                    foreach (Collider collider in colliders)
-                    {
-                        Vector3 attachPosition = editorPart.transform.TransformPoint(editorPart.srfAttachNode.position);
-                        Vector3 closestPoint = collider.ClosestPoint(attachPosition);
-
-                        /*
-                         According to the unity doc, if the attachPosition is inside the collider,
-                         then the input point should be returned by ClosestPoint. Which makes sense. 
-                         But, it seems that actually the position of the collider is returned instead. 
-                         In this case, move the closest point to the attach position manually instead.
-                         */
-                        
-                        if (closestPoint == collider.transform.position)
-                            closestPoint = attachPosition;
-
-                        float distance = Vector3.Distance(closestPoint, attachPosition);
-                        
-                        printf("Collider %s: %s + %s = %s, %s, %sm",
-                            collider.transform.position,
-                            editorPart.transform.localPosition,
-                            editorPart.srfAttachNode.position,
-                            attachPosition,
-                            closestPoint,
-                            distance);
-
-                        if (distance < bestDistance)
-                        {
-                            bestDistance = distance;
-                            bestCollider = collider;
-
-                            if (distance == 0)
-                                break;
-                        }
-                    }
-
-                    OnSurfaceAttachedPart(editorPart, bestCollider);
-                    break;
-                }
+                collider.tag = "Untagged";
+            }
         }
     }
 
@@ -731,25 +693,25 @@ public class AnimatedAttachment : PartModule
         flightState = State.STARTED;
     }
 
-    private void Save(ConfigNode node, List<AttachNodeInfo> attachNodeInfos)
+    private void Save(ConfigNode node, List<AttachedPartInfo> attachNodeInfos)
     {
         if (attachNodeInfos == null)
             return;
 
-        foreach (AttachNodeInfo attachNodInfo in attachNodeInfos)
+        foreach (AttachedPartInfo attachNodInfo in attachNodeInfos)
             attachNodInfo.Save(node);
 
-        printf("%s", node);
+        if(debug)
+            printf("Save: %s", node);
     }
 
     public override void OnSave(ConfigNode node)
     {
         base.OnSave(node);
 
-        Save(node.AddNode("STACK_ATTACH_NODE_INFOS"), stackAttachNodeInfos);
-        Save(node.AddNode("SURFACE_ATTACH_NODE_INFOS"), surfaceAttachNodeInfos);
+        Save(node.AddNode("ATTACHED_PART_INFOS"), attachedPartInfos);
 
-        if (debugVectors)
+        if (debug)
         {
             Debug.Log("AnimatedAttachment: OnSave");
             Debug.Log(node);
@@ -764,27 +726,19 @@ public class AnimatedAttachment : PartModule
         }
     }
 
-    private void Load(ConfigNode node, List<AttachNodeInfo> attachNodeInfos)
+    private void Load(ConfigNode node)
     {
-        printf("%s", node);
+        //if (debug)
+            printf("Load: %s", node);
 
         if (node == null)
             return;
 
-        if (attachNodeInfos.Count != 0)
+        for (int i = 0; i < node.CountNodes; i++)
         {
-            foreach (AttachNodeInfo attachNodInfo in attachNodeInfos)
-                attachNodInfo.Load(
-                    attachNodeInfos.IndexOf(attachNodInfo),
-                    node);
-        }
-        else
-        {
-            for(int i=0; i<node.CountNodes; i++)
-            {
-                AttachNodeInfo newAttachNodeInfo = new AttachNodeInfo(this, null, null);
-                newAttachNodeInfo.Load(i, node);
-            }
+            AttachedPartInfo attachedPartInfo = new AttachedPartInfo(this, null);
+            attachedPartInfos.Add(attachedPartInfo);
+            attachedPartInfo.Load(i, node);
         }
     }
 
@@ -792,7 +746,7 @@ public class AnimatedAttachment : PartModule
     {
         base.OnLoad(node);
 
-        if (debugVectors)
+        if (debug)
         {
             Debug.Log("AnimatedAttachment: OnLoad");
             Debug.Log(node);
@@ -800,36 +754,34 @@ public class AnimatedAttachment : PartModule
 
         InitAttachNodeLists();
 
-        Load(node.GetNode("STACK_ATTACH_NODE_INFOS"), stackAttachNodeInfos);
-        Load(node.GetNode("SURFACE_ATTACH_NODE_INFOS"), surfaceAttachNodeInfos);
+        Load(node.GetNode("ATTACHED_PART_INFOS"));
     }
 
     //LineInfo lineSurfaceAttachment;
-    internal void OnSurfaceAttachedPart(Part attachedPart, Collider collider)
+    internal void OnAttachedPart(Part attachedPart)
     {
-        printf("AnimatedAttachment: attached %s to %s",
-            attachedPart.name,
-            collider.name);
+        printf("AnimatedAttachment: attached %s",
+            attachedPart.name);
 
-        AttachNodeInfo newAttachNodeInfo = new AttachNodeInfo(this, attachedPart.srfAttachNode, collider);
-        surfaceAttachNodeInfos.Add(newAttachNodeInfo);
+        AttachedPartInfo newAttachNodeInfo = new AttachedPartInfo(this, attachedPart);
+        attachedPartInfos.Add(newAttachNodeInfo);
     }
 
-    internal void OnSurfaceDetachedPart(Part detachedPart)
+    internal void OnDetachedPart(Part detachedPart)
     {
         printf("AnimatedAttachment: detached: %s",
             detachedPart);
 
-        foreach (AttachNodeInfo attachNodeInfo in surfaceAttachNodeInfos)
+        foreach (AttachedPartInfo attachedPartInfo in attachedPartInfos)
         {
-            printf("DetachANI: %s %s %s",
-                attachNodeInfo,
-                attachNodeInfo.attachNode.id,
-                attachNodeInfo.attachNode.attachedPart);
+            printf("DetachANI: %s %s",
+                attachedPartInfo);
 
-            if (attachNodeInfo.attachNode.attachedPart == null)
+            if (attachedPartInfo.attachedPart == detachedPart)
             {
-                surfaceAttachNodeInfos.Remove(attachNodeInfo);
+                printf("Detached!");
+
+                attachedPartInfos.Remove(attachedPartInfo);
                 break;
             }
         }
@@ -860,6 +812,16 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
     static public AnimatedAttachmentUpdater GetSingleton()
     {
         return _this;
+    }
+
+    private static void printf(string format, params object[] a)
+    {
+        int i = 0;
+        string s = (format is string) ? System.Text.RegularExpressions.Regex.Replace((string)format, "%[sdi%]",
+          match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i - 1].ToString() : "null") : match.Value) : format.ToString();
+        //for (; i < a.Length; i++)
+        //  s += " " + a[i] != null ? a[i] : "null";
+        Debug.Log(s);
     }
 
     // Retrieve the active vessel and its parts
@@ -964,9 +926,12 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
 
     void Awake()
     {
-        Debug.Log("Awake");
-        
-        _this = this;
+        Debug.Log("AnimatedAttachment: Awake");
+
+        if (_this == null)
+        {
+            _this = this;
+        }
     }
 
     /*

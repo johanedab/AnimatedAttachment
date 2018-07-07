@@ -6,6 +6,91 @@ using UnityEngine;
 
 namespace VectorHelpers
 {
+    public class PosRot
+    {
+        public Quaternion rotation;
+        public Vector3 position;
+        public Vector3 orientation;
+
+        public override string ToString()
+        {
+            if (this == null)
+                return "null";
+
+            if (orientation != Vector3.zero)
+                return string.Format("{0}, {1}, {2}",
+                    position,
+                    rotation.eulerAngles,
+                    orientation);
+            return string.Format("{0}, {1}",
+                position,
+                rotation.eulerAngles);
+        }
+
+        public void Save(ConfigNode root, string name)
+        {
+            ConfigNode node = root.AddNode("POS_ROT");
+
+            node.AddValue("name", name);
+            node.AddValue("position", position);
+            node.AddValue("rotation", rotation);
+            node.AddValue("orientation", orientation);
+        }
+
+        public void Load(ConfigNode root, string name)
+        {
+            if (root == null)
+                return;
+
+            ConfigNode node = root.GetNode("POS_ROT");
+
+            if (node == null)
+                return;
+
+            if (node.GetValue("name") != "offset")
+                return;
+
+            position = VectorHelper.StringToVector3(node.GetValue("position"));
+            rotation = VectorHelper.StringToQuaternion(node.GetValue("rotation"));
+            orientation = VectorHelper.StringToVector3(node.GetValue("orientation"));
+        }
+
+        // Get a rotation from a node in a part relative to the part instead of the immediate parent
+        public static PosRot GetPosRot(Transform transform, Part part)
+        {
+            PosRot result = new PosRot
+            {
+                rotation = Quaternion.identity
+            };
+
+            do
+            {
+                // Use the scaling from the parent, if there is one.
+                // The only known situation where we will not have a parent
+                // is if the transform is a jettisonable transform that has
+                // its parent set to the decoupler part.
+                if (transform.parent == null)
+                    return null;
+
+                // Walk up the tree to the part transform, adding up all the local positions and rotations
+                // to make them relative to the part transform
+                result.position = transform.localRotation * result.position + Vector3.Scale(transform.parent.localScale, transform.localPosition);
+                result.rotation = transform.localRotation * result.rotation;
+
+                transform = transform.parent;
+            }
+            while (transform != null && transform != part.transform);
+
+            // Update the orientation vector
+            result.orientation = result.rotation * Vector3.forward;
+
+            // Include the rescale factor
+            result.position *= part.rescaleFactor;
+
+            return result;
+        }
+    }
+
     // Create a line in a specific reference frame and update it
     public class LineInfo
     {
