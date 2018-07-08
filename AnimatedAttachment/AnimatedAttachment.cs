@@ -18,7 +18,7 @@ using VectorHelpers;
  * Instead
  *****************************************************************************/
 
-public class AnimatedAttachment : PartModule
+public class AnimatedAttachment : PartModule, IJointLockState
 {
     [KSPField(isPersistant = false, guiName = "Animated attachments", guiActiveEditor = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
@@ -35,7 +35,16 @@ public class AnimatedAttachment : PartModule
     [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
     [KSPField(isPersistant = true, guiName = "Spring", guiActiveEditor = true, advancedTweakable = true)]
     public float positionSpring = 10000f;
-    public int counter;
+
+    // For debugging purposes, we want to limit the console output a bit 
+    private int debugCounter;
+
+    // Opotionally show unit vectors of the axes for debugging purposes
+    private AxisInfo axisWorld;
+    private AxisInfo axisAttachNode;
+
+    // Contains info for all the attached sub parts
+    List<AttachedPartInfo> attachedPartInfos;
 
     private static void printf(string format, params object[] a)
     {
@@ -53,7 +62,7 @@ public class AnimatedAttachment : PartModule
 
     private void FixedUpdate()
     {
-        bool debugLog = debug && ((counter++ % 100) == 0);
+        bool debugLog = debug && ((debugCounter++ % 100) == 0);
 
         UpdateAttachments(attachedPartInfos, debugLog);
         UpdateState();
@@ -513,16 +522,6 @@ public class AnimatedAttachment : PartModule
         }
     }
 
-    // For debugging purposes, we want to limit the console output a bit 
-    int debugCounter;
-    
-    // Opotionally show unit vectors of the axes for debugging purposes
-    public AxisInfo axisWorld;
-    public AxisInfo axisAttachNode;
-
-    // Contains info for all the attached sub parts
-    List<AttachedPartInfo> attachedPartInfos;
-
     private void UpdateAttachments(List<AttachedPartInfo> attachedPartInfos, bool debugPeriodic)
     {
         // Bail out if init failed
@@ -640,7 +639,6 @@ public class AnimatedAttachment : PartModule
             if (axisWorld != null)
                 axisWorld = null;
         }
-        debugCounter++;
     }
 
     private void InitAttachNodeLists()
@@ -726,7 +724,7 @@ public class AnimatedAttachment : PartModule
         }
     }
 
-    private void Load(ConfigNode node)
+    private void LoadAttachedParts(ConfigNode node)
     {
         if (node == null)
             return;
@@ -742,12 +740,19 @@ public class AnimatedAttachment : PartModule
     public override void OnLoad(ConfigNode node)
     {
         base.OnLoad(node);
-
+        
         InitAttachNodeLists();
 
-        Load(node.GetNode("ATTACHED_PART_INFOS"));
+        LoadAttachedParts(node.GetNode("ATTACHED_PART_INFOS"));
+    }
+
+    public bool IsJointUnlocked()
+    {
+        return true;
     }
 }
+
+
 
 /* 
  * We need to save original positions when going to TimeWarp and leaving the flight scene.
@@ -757,31 +762,13 @@ public class AnimatedAttachment : PartModule
 [KSPAddon(KSPAddon.Startup.FlightAndEditor, false)]
 public class AnimatedAttachmentUpdater : MonoBehaviour
 {
-    static AnimatedAttachmentUpdater _this;
     float timeWarpCurrent;
-    bool wasMoving;
-
-    // Collect info about all the parts in the vessel and their earlier auto strut mode
-    class PartInfo
-    {
-        public Part part;
-        public Part.AutoStrutMode autoStrutMode;
-    }
-
-    PartInfo[] partInfos;
-
-    static public AnimatedAttachmentUpdater GetSingleton()
-    {
-        return _this;
-    }
 
     private static void printf(string format, params object[] a)
     {
         int i = 0;
         string s = (format is string) ? System.Text.RegularExpressions.Regex.Replace((string)format, "%[sdi%]",
           match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i - 1].ToString() : "null") : match.Value) : format.ToString();
-        //for (; i < a.Length; i++)
-        //  s += " " + a[i] != null ? a[i] : "null";
         Debug.Log(s);
     }
 
@@ -812,68 +799,6 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
             }
             timeWarpCurrent = TimeWarp.CurrentRate;
         }
-
-        UpdateStruts();
-        // UpdateOriginalPositions();
-    }
-
-    private void UpdateStruts()
-    {
-        bool isMoving = AnyAnimationMoving();
-
-        if (isMoving == wasMoving)
-            return;
-        wasMoving = isMoving;
-
-        printf(isMoving ? "Started moving" : "Stopped moving");
-
-        List<Part> parts = AnimatedAttachmentUpdater.GetParts();
-
-        if (isMoving)
-        {
-            partInfos = new PartInfo[parts.Count];
-
-            // If any part is moving, we need to de-strut any wheels
-            foreach (Part part in parts)
-            {
-                // Ignore parts that don't have struting
-                if (part.autoStrutMode == Part.AutoStrutMode.Off)
-                    continue;
-
-                // Create a record to keep track of the part and the current mode
-                PartInfo partInfo = new PartInfo();
-                partInfos[parts.IndexOf(part)] = partInfo;
-
-                partInfo.part = part;
-                partInfo.autoStrutMode = part.autoStrutMode;
-
-                printf("Changing auto strut of %s from %s to %s",
-                    part.name,
-                    part.autoStrutMode,
-                    Part.AutoStrutMode.Off);
-
-                // Remove the struting
-                part.autoStrutMode = Part.AutoStrutMode.Off;
-                part.ReleaseAutoStruts();
-            }
-        }
-        else
-        {
-            // Go through our list of de-strutted parts and put their original strutting back again
-            foreach(PartInfo partInfo in partInfos)
-            {
-                if (partInfo == null)
-                    continue;
-
-                printf("Changing auto strut of %s from %s to %s",
-                    partInfo.part.name,
-                    partInfo.part.autoStrutMode,
-                    partInfo.autoStrutMode);
-
-                // Bring struty back
-                partInfo.part.autoStrutMode = partInfo.autoStrutMode;
-            }
-        }
     }
 
     // Save all current positions as original positions, so that parts start in the
@@ -884,36 +809,4 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
         foreach (Part part in parts)
             part.UpdateOrgPosAndRot(part.localRoot);    
     }    
-
-    void Awake()
-    {
-        Debug.Log("AnimatedAttachment: Awake");
-
-        if (_this == null)
-        {
-            _this = this;
-        }
-    }
-
-    /*
-    private AnimatedAttachment GetAnimatedAttachment(Part parent)
-    {
-        foreach (PartModule partModule in parent.Modules)
-            if (partModule.moduleName == "AnimatedAttachment")
-                return (AnimatedAttachment)partModule;
-        return null;
-    }
-    */
-
-    // Check if any animation is moving
-    public static bool AnyAnimationMoving()
-    {
-        List<Part> parts = GetParts();
-        foreach (Part part in parts)
-            foreach (PartModule partModule in part.Modules)
-                if (partModule.moduleName == "ModuleAnimateGeneric")
-                    if (((ModuleAnimateGeneric)partModule).aniState == ModuleAnimateGeneric.animationStates.MOVING)
-                        return true;
-        return false;
-    }
 }
