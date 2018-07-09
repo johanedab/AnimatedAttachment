@@ -30,7 +30,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
     [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
     public float maximumForce = 10000f;
     [KSPField(isPersistant = true, guiName = "Damper", guiActiveEditor = true, advancedTweakable = true)]
-    [UI_FloatRange(minValue = 1f, maxValue = 10000f, stepIncrement = 1f )]
+    [UI_FloatRange(minValue = 1f, maxValue = 10000f, stepIncrement = 1f)]
     public float positionDamper = 1000f;
     [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
     [KSPField(isPersistant = true, guiName = "Spring", guiActiveEditor = true, advancedTweakable = true)]
@@ -50,9 +50,9 @@ public class AnimatedAttachment : PartModule, IJointLockState
     {
         int i = 0;
         string s = (format is string) ? System.Text.RegularExpressions.Regex.Replace((string)format, "%[sdi%]",
-          match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i-1].ToString() : "null") : match.Value) : format.ToString();
+          match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i - 1].ToString() : "null") : match.Value) : format.ToString();
         //for (; i < a.Length; i++)
-          //  s += " " + a[i] != null ? a[i] : "null";
+        //  s += " " + a[i] != null ? a[i] : "null";
         Debug.Log(s);
     }
 
@@ -185,7 +185,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
             foreach (Collider collider in colliders)
                 if (collider.name == colliderName)
-                    this.collider = collider; 
+                    this.collider = collider;
 
             nodeType = (AttachNode.NodeType)Enum.Parse(typeof(AttachNode.NodeType), attachNodeInfo.GetValue("nodeType"));
 
@@ -227,7 +227,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
                     {
                         SetCollider();
 
-                        if(debug)
+                        if (debug)
                             printf("Setting collider to %s",
                                 collider.name);
                     }
@@ -279,7 +279,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
             }
             else
             {
-                if(debug)
+                if (debug)
                     printf("attachedPartOffset: %s", attachedPartOffset);
 
                 if (attachedPartOffset == null)
@@ -377,26 +377,26 @@ public class AnimatedAttachment : PartModule, IJointLockState
                             printf(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
                             printf(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
                             */
-                            // The joint will not respond to changes to targetRotation/Position in locked mode,
-                            // so change it to free in all directions
-                            joint.xMotion = ConfigurableJointMotion.Free;
-                            joint.yMotion = ConfigurableJointMotion.Free;
-                            joint.zMotion = ConfigurableJointMotion.Free;
-                            joint.angularXMotion = ConfigurableJointMotion.Free;
-                            joint.angularYMotion = ConfigurableJointMotion.Free;
-                            joint.angularZMotion = ConfigurableJointMotion.Free;
+                        // The joint will not respond to changes to targetRotation/Position in locked mode,
+                        // so change it to free in all directions
+                        joint.xMotion = ConfigurableJointMotion.Free;
+                        joint.yMotion = ConfigurableJointMotion.Free;
+                        joint.zMotion = ConfigurableJointMotion.Free;
+                        joint.angularXMotion = ConfigurableJointMotion.Free;
+                        joint.angularYMotion = ConfigurableJointMotion.Free;
+                        joint.angularZMotion = ConfigurableJointMotion.Free;
 
-                            // Create a new joint with settings from the cfg file or user selection
-                            jointDrive.maximumForce = animatedAttachment.maximumForce;
-                            jointDrive.positionDamper = animatedAttachment.positionDamper;
-                            jointDrive.positionSpring = animatedAttachment.positionSpring;
+                        // Create a new joint with settings from the cfg file or user selection
+                        jointDrive.maximumForce = animatedAttachment.maximumForce;
+                        jointDrive.positionDamper = animatedAttachment.positionDamper;
+                        jointDrive.positionSpring = animatedAttachment.positionSpring;
 
-                            // Same drive in all directions.. is there benefits of separating them?
-                            joint.angularXDrive = jointDrive;
-                            joint.angularYZDrive = jointDrive;
-                            joint.xDrive = jointDrive;
-                            joint.yDrive = jointDrive;
-                            joint.zDrive = jointDrive;
+                        // Same drive in all directions.. is there benefits of separating them?
+                        joint.angularXDrive = jointDrive;
+                        joint.angularYZDrive = jointDrive;
+                        joint.xDrive = jointDrive;
+                        joint.yDrive = jointDrive;
+                        joint.zDrive = jointDrive;
                         //}
 
                         // Update the joint.targetRotation using this convenience function, since the joint
@@ -418,7 +418,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
                         // This scaling and rotation is to convert to joint space... maybe? 
                         // Determined by random tinkering and magical as far as I am concerned
-                        joint.anchor = attachedPartOffset.rotation.Inverse() * 
+                        joint.anchor = attachedPartOffset.rotation.Inverse() *
                             Vector3.Scale(
                                 new Vector3(-1, -1, -1),
                                 attachedPartOffset.position);
@@ -449,7 +449,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
                                 lineNodeToPart = new LineInfo(animatedAttachment.part.transform, Color.magenta);
                             lineNodeToPart.Update(
                                 attachNodePosRot.position,
-                                attachedPartPosRot.position);                                                    
+                                attachedPartPosRot.position);
                         }
                         else
                         {
@@ -467,7 +467,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
                 if (orientationAttachNode == null)
                     orientationAttachNode = new OrientationInfo(animatedAttachment.part.transform, attachNodePosRot.position, attachNodePosRot.position + attachedPartOffset.orientation);
 
-                if(stackAttachNode != null)
+                if (stackAttachNode != null)
                     orientationAttachNode.Update(attachNodePosRot.position, attachNodePosRot.position + stackAttachNode.orientation);
             }
             else
@@ -500,7 +500,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
                 float distance = Vector3.Distance(closestPoint, attachPosition);
 
-                if(animatedAttachment.debug)
+                if (animatedAttachment.debug)
                     printf("Collider %s: %s + %s = %s, %s, %sm",
                         collider.transform.position,
                         attachedPart.transform.localPosition,
@@ -527,7 +527,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
         // Bail out if init failed
         if (attachedPartInfos == null)
         {
-            if(debugPeriodic)
+            if (debugPeriodic)
                 print("Empty attach node info list!");
             return;
         }
@@ -567,7 +567,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
             attachNode.orientation = attachNodePosRot.orientation;
         }
 
-        for (int i=0; i < part.children.Count; i++)
+        for (int i = 0; i < part.children.Count; i++)
         {
             Part child = part.children[i];
             // Create new entries in the list if needed
@@ -702,7 +702,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
         foreach (AttachedPartInfo attachNodInfo in attachNodeInfos)
             attachNodInfo.Save(node);
 
-        if(debug)
+        if (debug)
             printf("Save: %s", node);
     }
 
@@ -740,7 +740,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
     public override void OnLoad(ConfigNode node)
     {
         base.OnLoad(node);
-        
+
         InitAttachNodeLists();
 
         LoadAttachedParts(node.GetNode("ATTACHED_PART_INFOS"));
@@ -748,6 +748,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
     public bool IsJointUnlocked()
     {
+        printf("IsJointUnlocked");
         return true;
     }
 }
@@ -807,6 +808,118 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
     {
         List<Part> parts = GetParts();
         foreach (Part part in parts)
-            part.UpdateOrgPosAndRot(part.localRoot);    
-    }    
+            part.UpdateOrgPosAndRot(part.localRoot);
+    }
+}
+
+/* 
+ * Stock auto-strut from wheels cause issues by not implementing the IJointLockState properly.
+ * Work-around this by temporarily disabling all auto-struts when something is moving (here 
+ * defined as any animation is running).
+ */
+[KSPAddon(KSPAddon.Startup.Flight, false)]
+public class AutoStrutUpdater: MonoBehaviour
+{
+    bool wasMoving;
+
+    // Collect info about all the parts in the vessel and their earlier auto strut mode
+    class PartInfo
+    {
+        public Part part;
+        public Part.AutoStrutMode autoStrutMode;
+    }
+
+    PartInfo[] partInfos;
+
+    private static void printf(string format, params object[] a)
+    {
+        int i = 0;
+        string s = (format is string) ? System.Text.RegularExpressions.Regex.Replace((string)format, "%[sdi%]",
+          match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i - 1].ToString() : "null") : match.Value) : format.ToString();
+        Debug.Log(s);
+    }
+
+    // Retrieve the active vessel and its parts
+    public static List<Part> GetParts()
+    {
+        List<Part> parts = null;
+
+        if (FlightGlobals.ActiveVessel)
+            parts = FlightGlobals.ActiveVessel.parts;
+        else
+            parts = EditorLogic.fetch.ship.parts;
+
+        return parts;
+    }
+
+    void FixedUpdate()
+    {
+        bool isMoving = AnyAnimationMoving();
+
+        if (isMoving == wasMoving)
+            return;
+        wasMoving = isMoving;
+
+        printf(isMoving ? "Started moving" : "Stopped moving");
+
+        List<Part> parts = AnimatedAttachmentUpdater.GetParts();
+
+        if (isMoving)
+        {
+            partInfos = new PartInfo[parts.Count];
+
+            // If any part is moving, we need to de-strut any wheels
+            foreach (Part part in parts)
+            {
+                // Ignore parts that don't have struting
+                if (part.autoStrutMode == Part.AutoStrutMode.Off)
+                    continue;
+
+                // Create a record to keep track of the part and the current mode
+                PartInfo partInfo = new PartInfo();
+                partInfos[parts.IndexOf(part)] = partInfo;
+
+                partInfo.part = part;
+                partInfo.autoStrutMode = part.autoStrutMode;
+
+                printf("Changing auto strut of %s from %s to %s",
+                    part.name,
+                    part.autoStrutMode,
+                    Part.AutoStrutMode.Off);
+
+                // Remove the struting
+                part.autoStrutMode = Part.AutoStrutMode.Off;
+                part.ReleaseAutoStruts();
+            }
+        }
+        else
+        {
+            // Go through our list of de-strutted parts and put their original strutting back again
+            foreach (PartInfo partInfo in partInfos)
+            {
+                if (partInfo == null)
+                    continue;
+
+                printf("Changing auto strut of %s from %s to %s",
+                    partInfo.part.name,
+                    partInfo.part.autoStrutMode,
+                    partInfo.autoStrutMode);
+
+                // Bring struty back
+                partInfo.part.autoStrutMode = partInfo.autoStrutMode;
+            }
+        }
+    }
+
+    // Check if any animation is moving
+    public static bool AnyAnimationMoving()
+    {
+        List<Part> parts = GetParts();
+        foreach (Part part in parts)
+            foreach (PartModule partModule in part.Modules)
+                if (partModule.moduleName == "ModuleAnimateGeneric")
+                    if (((ModuleAnimateGeneric)partModule).aniState == ModuleAnimateGeneric.animationStates.MOVING)
+                        return true;
+        return false;
+    }
 }
