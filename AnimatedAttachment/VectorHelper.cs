@@ -128,6 +128,11 @@ namespace VectorHelpers
             lineRenderer.SetPosition(0, from);
             lineRenderer.SetPosition(1, to);
         }
+
+        internal void Destroy()
+        {
+            lineRenderer = null;
+        }
     }
 
     // Show two vectors, one set at creation and one update in real-time
@@ -146,6 +151,14 @@ namespace VectorHelpers
         public void Update(Vector3 from, Vector3 to)
         {
             current.Update(from, to);
+        }
+
+        public void Destroy()
+        {
+            original.Destroy();
+            original = null;
+            current.Destroy();
+            current = null;
         }
     }
 

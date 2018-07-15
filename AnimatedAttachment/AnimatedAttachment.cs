@@ -53,7 +53,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
           match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i - 1].ToString() : "null") : match.Value) : format.ToString();
         //for (; i < a.Length; i++)
         //  s += " " + a[i] != null ? a[i] : "null";
-        Debug.Log(s);
+        Debug.Log("AnimatedAttachment: " + s);
     }
 
     private void Update()
@@ -162,8 +162,6 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
         internal void Load(int index, ConfigNode root)
         {
-            printf("Load [%s]", index);
-
             ConfigNode attachNodeInfo = root.GetNode("ATTACH_NODE_INFO", index);
             if (attachNodeInfo == null)
             {
@@ -573,9 +571,10 @@ public class AnimatedAttachment : PartModule, IJointLockState
             // Create new entries in the list if needed
             if (i >= attachedPartInfos.Count)
             {
-                printf("Adding child %s [%s]",
-                    child.name,
-                    i);
+                if (debug)
+                    printf("Adding child %s [%s]",
+                        child.name,
+                        i);
 
                 attachedPartInfos.Add(new AttachedPartInfo(this, child));
             }
@@ -587,17 +586,19 @@ public class AnimatedAttachment : PartModule, IJointLockState
                 attachedPartInfo.attachedPart = child;
                 attachedPartInfo.loaded = false;
 
-                printf("Assigning child %s [%s]",
-                    attachedPartInfo.attachedPart,
-                    i);
+                if(debug)
+                    printf("Assigning child %s [%s]",
+                        attachedPartInfo.attachedPart,
+                        i);
             }
             else
             // Remove stale entries
             if (attachedPartInfo.attachedPart != child)
             {
-                printf("Deleting child %s/%s",
-                    attachedPartInfo.attachedPart,
-                    child.name);
+                if (debug)
+                    printf("Deleting child %s/%s",
+                        attachedPartInfo.attachedPart,
+                        child.name);
                 attachedPartInfos.Remove(attachedPartInfo);
                 i--;
                 continue;
@@ -614,9 +615,10 @@ public class AnimatedAttachment : PartModule, IJointLockState
         while (attachedPartInfos.Count > part.children.Count)
         {
             AttachedPartInfo attachedPartInfo = attachedPartInfos[part.children.Count];
-            printf("Deleting child %s [%s]",
-                attachedPartInfo.attachedPart,
-                part.children.Count);
+            if (debug)
+                printf("Deleting child %s [%s]",
+                    attachedPartInfo.attachedPart,
+                    part.children.Count);
             attachedPartInfos.Remove(attachedPartInfo);
         }
     }
@@ -643,10 +645,6 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
     private void InitAttachNodeLists()
     {
-        printf("InitAttachNodeLists: %s %s",
-            attachedPartInfos,
-            part.children.Count);
-
         if (attachedPartInfos == null)
         {
             // Set up our array containing info about each attach node and their connected parts
@@ -663,7 +661,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
         InitAttachNodeLists();
 
         flightState = State.INIT;
-        UpdateAttachments(attachedPartInfos, true);
+        UpdateAttachments(attachedPartInfos, false);
         flightState = State.STARTING;
     }
 
@@ -748,7 +746,6 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
     public bool IsJointUnlocked()
     {
-        printf("IsJointUnlocked");
         return true;
     }
 }
@@ -770,7 +767,7 @@ public class AnimatedAttachmentUpdater : MonoBehaviour
         int i = 0;
         string s = (format is string) ? System.Text.RegularExpressions.Regex.Replace((string)format, "%[sdi%]",
           match => match.Value == "%%" ? "%" : i < a.Length ? (a[i++] != null ? a[i - 1].ToString() : "null") : match.Value) : format.ToString();
-        Debug.Log(s);
+        Debug.Log("AnimatedAttachmentUpdater: " + s);
     }
 
     // Retrieve the active vessel and its parts

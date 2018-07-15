@@ -1,0 +1,11 @@
+C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program Dev\GameData\AnimatedAttachment\Plugins\AnimatedAttachment.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csprojResolveAssemblyReference.cache
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CopyComplete
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
+D:\Dropbox (EDAB)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
+C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program Dev\GameData\AnimatedAttachment\Plugins\AnimatedAttachment.pdb
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csprojResolveAssemblyReference.cache
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
+C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
