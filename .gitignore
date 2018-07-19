@@ -7,3 +7,6 @@ GameData/AnimatedAttachment/Plugins/Assembly-CSharp.dll
 GameData/AnimatedAttachment/Plugins/TDx.TDxInput.dll
 GameData/AnimatedAttachment/Plugins/UnityEngine.dll
 GameData/AnimatedAttachment/Plugins/UnityEngine.UI.dll
+AnimatedAttachment/obj/Debug/AnimatedAttachment.csproj.CoreCompileInputs.cache
+AnimatedAttachment/obj/Debug/AnimatedAttachment.csproj.FileListAbsolute.txt
+AnimatedAttachment/obj/Debug/AnimatedAttachment.csprojResolveAssemblyReference.cache

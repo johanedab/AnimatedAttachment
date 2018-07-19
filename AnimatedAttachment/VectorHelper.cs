@@ -18,12 +18,14 @@ namespace VectorHelpers
                 return "null";
 
             if (orientation != Vector3.zero)
-                return string.Format("{0}, {1}, {2}",
+                return string.Format("{0}, {1}, {2}, {3}",
                     position,
+                    rotation,
                     rotation.eulerAngles,
                     orientation);
-            return string.Format("{0}, {1}",
+            return string.Format("{0}, {1}, {2}",
                 position,
+                rotation,
                 rotation.eulerAngles);
         }
 
