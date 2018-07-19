@@ -296,96 +296,31 @@ public class AnimatedAttachment : PartModule, IJointLockState
                 {
                     attachedPartOffset = new PosRot();
 
-                    printf("Recording attachedPartOffset, %s, %s, %s, %s, %s, %s, %s, %s, %s",
-                        attachedPart.transform.localPosition,
-                        attachedPart.transform.localRotation.eulerAngles,
-                        attachedPart.transform.position,
-                        attachedPart.transform.rotation.eulerAngles,
-                        animatedAttachment.part.transform.localRotation.eulerAngles,
-                        animatedAttachment.part.orgRot,
-                        animatedAttachment.part.orgRot.Inverse().eulerAngles,
-                        attachedPart.orgPos,
-                        attachedPart.orgRot.eulerAngles
-                        );
-
                     // Get attached part position relative to this part
-                    PosRot attachedPartPosRot = new PosRot();
-                    if (animatedAttachment.part.transform == attachedPart.transform.parent)
-                    {
-                        printf("Recording attachedPartOffset, local position");
-                        attachedPartPosRot.position = attachedPart.transform.localPosition;
-                        attachedPartPosRot.rotation = attachedPart.transform.localRotation;
-                    }
-                    else
-                    {
-                        printf("Recording attachedPartOffset, world position");
+                    PosRot localPosRot = new PosRot();
 
-                        //attachedPartPosRot.position = attachedPart.orgPos - animatedAttachment.part.orgPos;
-                        //attachedPartPosRot.rotation = animatedAttachment.part.orgRot.Inverse() * attachedPart.orgRot;
+                    printf("Recording attachedPartOffset, world position");
 
-                        PosRot worldPosition = new PosRot();
-                        //worldPosition.position = attachedPart.transform.InverseTransformPoint(animatedAttachment.part.transform.position);
-                        //worldPosition.position = attachedPart.transform.InverseTransformPoint(animatedAttachment.part.transform.position);
+                    Transform parent = attachedPart.transform.parent;
 
-                        //attachedPartPosRot.position = attachedPart.transform.InverseTransformPoint(animatedAttachment.part.transform.position);
+                    // Let the engine calculate the local position instead of doing the calculation ourselves..
+                    attachedPart.transform.parent = animatedAttachment.part.transform;
+                    localPosRot.position = attachedPart.transform.localPosition;
+                    localPosRot.rotation = attachedPart.transform.localRotation;
+                    attachedPart.transform.parent = parent;
 
-                        Transform parent = attachedPart.transform.parent;
-
-                        attachedPart.transform.parent = animatedAttachment.part.transform;
-                        attachedPartPosRot.position = attachedPart.transform.localPosition;
-                        attachedPartPosRot.rotation = attachedPart.transform.localRotation;
-
-                        attachedPart.transform.parent = parent;
-
-                        /*
-                        attachedPartPosRot.rotation = animatedAttachment.part.transform.rotation.Inverse() * attachedPart.transform.rotation;
-
-                        attachedPartPosRot.position =
-                            animatedAttachment.part.transform.rotation.Inverse() *
-                            (attachedPart.transform.position -
-                            animatedAttachment.part.transform.position);
-                        */
-                    }
-                    printf("attachedPartPosRot: %s", attachedPartPosRot);
-                    printf("reference: %s", referencePosRot);
-
+                    // We could do parenting trick for this too, but seems we loose the scaling
                     attachedPartOffset.rotation =
                         referencePosRot.rotation.Inverse() *
-                        attachedPartPosRot.rotation;
-
-                    printf("calc: %s = %s * %s",
-                        attachedPartOffset.rotation,
-                        referencePosRot.rotation.Inverse(),
-                        attachedPartPosRot.rotation);
-
-                    printf("calc: %s = %s * %s",
-                        attachedPartOffset.rotation.eulerAngles,
-                        referencePosRot.rotation.Inverse().eulerAngles,
-                        attachedPartPosRot.rotation.eulerAngles);
+                        localPosRot.rotation;
 
                     attachedPartOffset.position =
                         referencePosRot.rotation.Inverse() *
-                        (attachedPartPosRot.position -
+                        (localPosRot.position -
                         referencePosRot.position);
-
-                    printf("calc: %s = %s * (%s - %s)",
-                        attachedPartOffset.position,
-                        referencePosRot.rotation.Inverse(),
-                        attachedPartPosRot.position,
-                        referencePosRot.position);
-
-                    printf("calc: %s = %s * (%s - %s)",
-                        attachedPartOffset.position,
-                        referencePosRot.rotation.Inverse().eulerAngles,
-                        attachedPartPosRot.position,
-                        referencePosRot.position);
-
-                    printf("attachedPartOffset: %s", attachedPartOffset);
 
                     attachedPartOriginal = new PosRot();
-                    attachedPartOriginal.rotation = attachedPartPosRot.rotation;
-
-                    printf("attachedPartOriginal: %s", attachedPartOriginal);
+                    attachedPartOriginal.rotation = localPosRot.rotation;
                 }
             }
 
