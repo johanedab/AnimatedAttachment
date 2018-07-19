@@ -20,21 +20,21 @@ using VectorHelpers;
 
 public class AnimatedAttachment : PartModule, IJointLockState
 {
-    [KSPField(isPersistant = false, guiName = "Animated attachments", guiActiveEditor = true, advancedTweakable = true)]
+    [KSPField(isPersistant = true, guiName = "Animated attachments", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
     public bool activated = true;
     [KSPField(isPersistant = false, guiName = "Debug", guiActiveEditor = true, guiActive = true, advancedTweakable = true)]
     [UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
     public bool debug = false;
     [KSPField(isPersistant = true, guiName = "Maximum force", guiActiveEditor = true, advancedTweakable = true)]
-    [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
-    public float maximumForce = 10000f;
+    [UI_FloatRange(minValue = 1f, maxValue = 1000000f, stepIncrement = 1f)]
+    public float maximumForce = 100000f;
     [KSPField(isPersistant = true, guiName = "Damper", guiActiveEditor = true, advancedTweakable = true)]
     [UI_FloatRange(minValue = 1f, maxValue = 10000f, stepIncrement = 1f)]
     public float positionDamper = 1000f;
-    [UI_FloatRange(minValue = 1f, maxValue = 100000f, stepIncrement = 1f)]
+    [UI_FloatRange(minValue = 1f, maxValue = 1000000f, stepIncrement = 1f)]
     [KSPField(isPersistant = true, guiName = "Spring", guiActiveEditor = true, advancedTweakable = true)]
-    public float positionSpring = 10000f;
+    public float positionSpring = 100000f;
 
     // For debugging purposes, we want to limit the console output a bit 
     private int debugCounter;
@@ -199,7 +199,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
             // Part attachedPart = GetAttachedPart();
 
             if (debugPeriodic)
-                printf("UA: %s %s %s",
+                printf("UA: %s %s %s %s",
                     attachedPart != null ? attachedPart.name : null,
                     nodeType,
                     stackAttachNode != null ? stackAttachNode.id : "null",
@@ -235,6 +235,14 @@ public class AnimatedAttachment : PartModule, IJointLockState
                     {
                         stackAttachNode = animatedAttachment.part.FindAttachNodeByPart(attachedPart);
 
+                        // Sometimes life throws lemons at you, like when the user actvated attachments in flight
+                        if (stackAttachNode == null)
+                        {
+                            // Try again as surface attached
+                            nodeType = AttachNode.NodeType.Surface;
+                            return;
+                        }
+
                         if (debug)
                             printf("Setting attach node to %s",
                                 stackAttachNode.id);
@@ -255,18 +263,22 @@ public class AnimatedAttachment : PartModule, IJointLockState
             // Get the position and rotation of the node transform relative to the part.
             // The nodeTransform itself will only contain its positions and rotation 
             // relative to the immediate parent in the model
-            PosRot attachNodePosRot = PosRot.GetPosRot(referenceTransform, animatedAttachment.part);
+            PosRot referencePosRot = PosRot.GetPosRot(referenceTransform, animatedAttachment.part);
 
             // We can't animate decoupling shrouds
-            if (attachNodePosRot == null)
+            if (referencePosRot == null)
             {
                 if (debugPeriodic)
                     printf("Skipping decoupler shroud");
                 return;
             }
 
+            bool active = animatedAttachment.activated;
+            if (EditorLogic.fetch && (EditorLogic.fetch.EditorConstructionMode != ConstructionMode.Place))
+                active = false;
+
             // Take note of newly attached parts, including at initial ship load
-            if (attachedPart == null || !animatedAttachment.activated)
+            if (attachedPart == null || !active)
             {
                 if (debugPeriodic)
                     if (attachedPart == null)
@@ -284,17 +296,96 @@ public class AnimatedAttachment : PartModule, IJointLockState
                 {
                     attachedPartOffset = new PosRot();
 
-                    printf("Recording attachedPartOffset");
+                    printf("Recording attachedPartOffset, %s, %s, %s, %s, %s, %s, %s, %s, %s",
+                        attachedPart.transform.localPosition,
+                        attachedPart.transform.localRotation.eulerAngles,
+                        attachedPart.transform.position,
+                        attachedPart.transform.rotation.eulerAngles,
+                        animatedAttachment.part.transform.localRotation.eulerAngles,
+                        animatedAttachment.part.orgRot,
+                        animatedAttachment.part.orgRot.Inverse().eulerAngles,
+                        attachedPart.orgPos,
+                        attachedPart.orgRot.eulerAngles
+                        );
 
-                    // Get attached parts
+                    // Get attached part position relative to this part
+                    PosRot attachedPartPosRot = new PosRot();
+                    if (animatedAttachment.part.transform == attachedPart.transform.parent)
+                    {
+                        printf("Recording attachedPartOffset, local position");
+                        attachedPartPosRot.position = attachedPart.transform.localPosition;
+                        attachedPartPosRot.rotation = attachedPart.transform.localRotation;
+                    }
+                    else
+                    {
+                        printf("Recording attachedPartOffset, world position");
+
+                        //attachedPartPosRot.position = attachedPart.orgPos - animatedAttachment.part.orgPos;
+                        //attachedPartPosRot.rotation = animatedAttachment.part.orgRot.Inverse() * attachedPart.orgRot;
+
+                        PosRot worldPosition = new PosRot();
+                        //worldPosition.position = attachedPart.transform.InverseTransformPoint(animatedAttachment.part.transform.position);
+                        //worldPosition.position = attachedPart.transform.InverseTransformPoint(animatedAttachment.part.transform.position);
+
+                        //attachedPartPosRot.position = attachedPart.transform.InverseTransformPoint(animatedAttachment.part.transform.position);
+
+                        Transform parent = attachedPart.transform.parent;
+
+                        attachedPart.transform.parent = animatedAttachment.part.transform;
+                        attachedPartPosRot.position = attachedPart.transform.localPosition;
+                        attachedPartPosRot.rotation = attachedPart.transform.localRotation;
+
+                        attachedPart.transform.parent = parent;
+
+                        /*
+                        attachedPartPosRot.rotation = animatedAttachment.part.transform.rotation.Inverse() * attachedPart.transform.rotation;
+
+                        attachedPartPosRot.position =
+                            animatedAttachment.part.transform.rotation.Inverse() *
+                            (attachedPart.transform.position -
+                            animatedAttachment.part.transform.position);
+                        */
+                    }
+                    printf("attachedPartPosRot: %s", attachedPartPosRot);
+                    printf("reference: %s", referencePosRot);
+
                     attachedPartOffset.rotation =
-                        attachNodePosRot.rotation.Inverse() *
-                        attachedPart.transform.localRotation;
+                        referencePosRot.rotation.Inverse() *
+                        attachedPartPosRot.rotation;
+
+                    printf("calc: %s = %s * %s",
+                        attachedPartOffset.rotation,
+                        referencePosRot.rotation.Inverse(),
+                        attachedPartPosRot.rotation);
+
+                    printf("calc: %s = %s * %s",
+                        attachedPartOffset.rotation.eulerAngles,
+                        referencePosRot.rotation.Inverse().eulerAngles,
+                        attachedPartPosRot.rotation.eulerAngles);
 
                     attachedPartOffset.position =
-                        attachNodePosRot.rotation.Inverse() *
-                        (attachedPart.transform.localPosition -
-                        attachNodePosRot.position);
+                        referencePosRot.rotation.Inverse() *
+                        (attachedPartPosRot.position -
+                        referencePosRot.position);
+
+                    printf("calc: %s = %s * (%s - %s)",
+                        attachedPartOffset.position,
+                        referencePosRot.rotation.Inverse(),
+                        attachedPartPosRot.position,
+                        referencePosRot.position);
+
+                    printf("calc: %s = %s * (%s - %s)",
+                        attachedPartOffset.position,
+                        referencePosRot.rotation.Inverse().eulerAngles,
+                        attachedPartPosRot.position,
+                        referencePosRot.position);
+
+                    printf("attachedPartOffset: %s", attachedPartOffset);
+
+                    attachedPartOriginal = new PosRot();
+                    attachedPartOriginal.rotation = attachedPartPosRot.rotation;
+
+                    printf("attachedPartOriginal: %s", attachedPartOriginal);
                 }
             }
 
@@ -323,8 +414,8 @@ public class AnimatedAttachment : PartModule, IJointLockState
                         // Calculate the attached parts position in the frame of reference of this part
                         PosRot attachedPartPosRot = new PosRot
                         {
-                            rotation = attachNodePosRot.rotation * attachedPartOffset.rotation,
-                            position = attachNodePosRot.position + attachNodePosRot.rotation * attachedPartOffset.position
+                            rotation = referencePosRot.rotation * attachedPartOffset.rotation,
+                            position = referencePosRot.position + referencePosRot.rotation * attachedPartOffset.position
                         };
 
                         /* A sub part can either be connected directly by their transform having a parent transform,
@@ -396,6 +487,12 @@ public class AnimatedAttachment : PartModule, IJointLockState
                         joint.yDrive = jointDrive;
                         joint.zDrive = jointDrive;
                         //}
+                        if (debug)
+                            printf("%s", joint);
+                        if (debug)
+                            printf("%s", attachedPartPosRot);
+                        if (debug)
+                            printf("%s", attachedPartOriginal);
 
                         // Update the joint.targetRotation using this convenience function, since the joint
                         // reference frame has weird axes. Arguments are current and original rotation.
@@ -409,13 +506,13 @@ public class AnimatedAttachment : PartModule, IJointLockState
                          * attachment point of the attached part that is moving. There might be benefits of using the targetPosition
                          * though, and should be possible to calculate it fairly easily if needed.
                          */
-                        joint.connectedAnchor = attachNodePosRot.position;
+                        joint.connectedAnchor = referencePosRot.position;
 
                         // Make sure the target position is zero
                         joint.targetPosition = Vector3.zero;
 
                         // This scaling and rotation is to convert to joint space... maybe? 
-                        // Determined by random tinkering and magical as far as I am concerned
+                        // Determined by random tinkering and is magical as far as I am concerned
                         joint.anchor = attachedPartOffset.rotation.Inverse() *
                             Vector3.Scale(
                                 new Vector3(-1, -1, -1),
@@ -423,7 +520,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
                         if (debugPeriodic)
                             printf("%s; %s; %s -> %s; %s -> %s; %s",
-                                attachNodePosRot,
+                                referencePosRot,
                                 attachedPartPosRot,
                                 attachedPartOffset,
                                 attachedPartOriginal.rotation.eulerAngles,
@@ -446,7 +543,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
                             if (lineNodeToPart == null)
                                 lineNodeToPart = new LineInfo(animatedAttachment.part.transform, Color.magenta);
                             lineNodeToPart.Update(
-                                attachNodePosRot.position,
+                                referencePosRot.position,
                                 attachedPartPosRot.position);
                         }
                         else
@@ -463,10 +560,10 @@ public class AnimatedAttachment : PartModule, IJointLockState
             {
                 // Show debug vectors for the attachNodes
                 if (orientationAttachNode == null)
-                    orientationAttachNode = new OrientationInfo(animatedAttachment.part.transform, attachNodePosRot.position, attachNodePosRot.position + attachedPartOffset.orientation);
+                    orientationAttachNode = new OrientationInfo(animatedAttachment.part.transform, referencePosRot.position, referencePosRot.position + attachedPartOffset.orientation);
 
                 if (stackAttachNode != null)
-                    orientationAttachNode.Update(attachNodePosRot.position, attachNodePosRot.position + stackAttachNode.orientation);
+                    orientationAttachNode.Update(referencePosRot.position, referencePosRot.position + stackAttachNode.orientation);
             }
             else
             {
