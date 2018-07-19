@@ -287,29 +287,27 @@ public class AnimatedAttachment : PartModule, IJointLockState
                 attachedPartOffset = null;
                 return;
             }
-            else
-            {
-                if (debug)
-                    printf("attachedPartOffset: %s", attachedPartOffset);
 
+            if (attachedPartOffset == null || attachedPartOriginal == null)
+            {
+                // Get attached part position relative to this part
+                PosRot localPosRot = new PosRot();
+
+                Transform parent = attachedPart.transform.parent;
+
+                // Let the engine calculate the local position instead of doing the calculation ourselves..
+                attachedPart.transform.parent = animatedAttachment.part.transform;
+                localPosRot.position = attachedPart.transform.localPosition;
+                localPosRot.rotation = attachedPart.transform.localRotation;
+                attachedPart.transform.parent = parent;
+
+                // We could do parenting trick for this too, but seems we loose the scaling
                 if (attachedPartOffset == null)
                 {
+                    printf("Recording attachedPartOffset");
+
                     attachedPartOffset = new PosRot();
 
-                    // Get attached part position relative to this part
-                    PosRot localPosRot = new PosRot();
-
-                    printf("Recording attachedPartOffset, world position");
-
-                    Transform parent = attachedPart.transform.parent;
-
-                    // Let the engine calculate the local position instead of doing the calculation ourselves..
-                    attachedPart.transform.parent = animatedAttachment.part.transform;
-                    localPosRot.position = attachedPart.transform.localPosition;
-                    localPosRot.rotation = attachedPart.transform.localRotation;
-                    attachedPart.transform.parent = parent;
-
-                    // We could do parenting trick for this too, but seems we loose the scaling
                     attachedPartOffset.rotation =
                         referencePosRot.rotation.Inverse() *
                         localPosRot.rotation;
@@ -318,176 +316,156 @@ public class AnimatedAttachment : PartModule, IJointLockState
                         referencePosRot.rotation.Inverse() *
                         (localPosRot.position -
                         referencePosRot.position);
+                }
+
+                if (attachedPartOriginal == null)
+                {
+                    printf("Recording attachedPartOriginal");
 
                     attachedPartOriginal = new PosRot();
                     attachedPartOriginal.rotation = localPosRot.rotation;
                 }
             }
 
-            switch (flightState)
+            // Calculate the attached parts position in the frame of reference of this part
+            PosRot attachedPartPosRot = new PosRot
             {
-                // In the first pass, set the local position of the part
-                case State.INIT:
-                    {
-                        if (attachedPart == null)
-                            break;
+                rotation = referencePosRot.rotation * attachedPartOffset.rotation,
+                position = referencePosRot.position + referencePosRot.rotation * attachedPartOffset.position
+            };
 
-                        if (attachedPartOriginal == null)
-                        {
-                            attachedPartOriginal = new PosRot();
-                            attachedPartOriginal.rotation = attachedPart.transform.localRotation;
-                        }
-                    }
-                    break;
+            /* A sub part can either be connected directly by their transform having a parent transform,
+                * or be connected through a joint. In the first case, the sub part will directly move with
+                * their parent as their position is in in the reference frame of the parent local space.
+                * In the latter case, the sub part lacks a parent transform, and the position is in the vessel
+                * space instead, and parts are held together by forces working through the joints. 
+                * The first case occurs in two situations. In the VAB editor, all parts are connected by
+                * parent transforms. And, during flight, a physicsless part will also be connected to the parent
+                * this way - for example some science parts.
+                * Joints are used for normal physics based parts during flight.
+                */
 
-                case State.STARTING:
-                    break;
+            if (attachedPart.transform.parent != null)
+            {
+                // If a parent was found, we will just update the position of the part directly since no physics is involved
+                attachedPart.transform.localRotation = attachedPartPosRot.rotation;
+                attachedPart.transform.localPosition = attachedPartPosRot.position;
 
-                // On the third pass, get values of the attach node transform
-                case State.STARTED:
-                    {
-                        // Calculate the attached parts position in the frame of reference of this part
-                        PosRot attachedPartPosRot = new PosRot
-                        {
-                            rotation = referencePosRot.rotation * attachedPartOffset.rotation,
-                            position = referencePosRot.position + referencePosRot.rotation * attachedPartOffset.position
-                        };
+                if (debugPeriodic)
+                    printf("Updated pos without physics");
 
-                        /* A sub part can either be connected directly by their transform having a parent transform,
-                            * or be connected through a joint. In the first case, the sub part will directly move with
-                            * their parent as their position is in in the reference frame of the parent local space.
-                            * In the latter case, the sub part lacks a parent transform, and the position is in the vessel
-                            * space instead, and parts are held together by forces working through the joints. 
-                            * The first case occurs in two situations. In the VAB editor, all parts are connected by
-                            * parent transforms. And, during flight, a physicsless part will also be connected to the parent
-                            * this way - for example some science parts.
-                            * Joints are used for normal physics based parts during flight.
-                            */
+                // There is nothing more to do, so bail out
+                return;
+            }
 
-                        if (attachedPart.transform.parent != null)
-                        {
-                            // If a parent was found, we will just update the position of the part directly since no physics is involved
-                            attachedPart.transform.localRotation = attachedPartPosRot.rotation;
-                            attachedPart.transform.localPosition = attachedPartPosRot.position;
+            // In the editor, while changing action groups, the parent will be null for some reason.
+            // We can catch that here by making sure there exists a joint 
+            if (attachedPart.attachJoint == null)
+            {
+                if (debugPeriodic)
+                    printf("No attach joint found");
+                return;
+            }
 
-                            if (debugPeriodic)
-                                printf("Updated pos without physics");
+            // Things get tricker if the parts are connected by joints. We need to setup the joint
+            // to apply forces to the sub part.
+            ConfigurableJoint joint = attachedPart.attachJoint.Joint;
 
-                            // There is nothing more to do, so bail out
-                            break;
-                        }
+            // It is not possible to change values of a JointDrive after creation, so we must create a 
+            // new one and apply it to the joint. Seems we can't only create it at startup either. 
+            /*
+            if (!jointDriveInitialized)
+            {
+                jointDriveInitialized = true;
+                printff("Creating a new drive mode");
+                printf(string.Format("maximumForce: {0}", animatedAttachment.maximumForce));
+                printf(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
+                printf(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
+                */
+            // The joint will not respond to changes to targetRotation/Position in locked mode,
+            // so change it to free in all directions
+            joint.xMotion = ConfigurableJointMotion.Free;
+            joint.yMotion = ConfigurableJointMotion.Free;
+            joint.zMotion = ConfigurableJointMotion.Free;
+            joint.angularXMotion = ConfigurableJointMotion.Free;
+            joint.angularYMotion = ConfigurableJointMotion.Free;
+            joint.angularZMotion = ConfigurableJointMotion.Free;
 
-                        // In the editor, while changing action groups, the parent will be null for some reason.
-                        // We can catch that here by making sure there is axists a joint 
-                        if (attachedPart.attachJoint == null)
-                        {
-                            if (debugPeriodic)
-                                printf("No attach joint found");
-                            break;
-                        }
+            // Create a new joint with settings from the cfg file or user selection
+            jointDrive.maximumForce = animatedAttachment.maximumForce;
+            jointDrive.positionDamper = animatedAttachment.positionDamper;
+            jointDrive.positionSpring = animatedAttachment.positionSpring;
 
-                        // Things get tricker if the parts are connected by joints. We need to setup the joint
-                        // to apply forces to the sub part.
-                        ConfigurableJoint joint = attachedPart.attachJoint.Joint;
+            // Same drive in all directions.. is there benefits of separating them?
+            joint.angularXDrive = jointDrive;
+            joint.angularYZDrive = jointDrive;
+            joint.xDrive = jointDrive;
+            joint.yDrive = jointDrive;
+            joint.zDrive = jointDrive;
+            //}
+            if (debug)
+                printf("%s", joint);
+            if (debug)
+                printf("%s", attachedPartPosRot);
+            if (debug)
+                printf("%s", attachedPartOriginal);
 
-                        // It is not possible to change values of a JointDrive after creation, so we must create a 
-                        // new one and apply it to the joint. Seems we can't only create it at startup either. 
-                        /*
-                        if (!jointDriveInitialized)
-                        {
-                            jointDriveInitialized = true;
-                            printff("Creating a new drive mode");
-                            printf(string.Format("maximumForce: {0}", animatedAttachment.maximumForce));
-                            printf(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
-                            printf(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
-                            */
-                        // The joint will not respond to changes to targetRotation/Position in locked mode,
-                        // so change it to free in all directions
-                        joint.xMotion = ConfigurableJointMotion.Free;
-                        joint.yMotion = ConfigurableJointMotion.Free;
-                        joint.zMotion = ConfigurableJointMotion.Free;
-                        joint.angularXMotion = ConfigurableJointMotion.Free;
-                        joint.angularYMotion = ConfigurableJointMotion.Free;
-                        joint.angularZMotion = ConfigurableJointMotion.Free;
+            // Update the joint.targetRotation using this convenience function, since the joint
+            // reference frame has weird axes. Arguments are current and original rotation.
+            joint.SetTargetRotationLocal(
+                attachedPartPosRot.rotation,
+                attachedPartOriginal.rotation);
 
-                        // Create a new joint with settings from the cfg file or user selection
-                        jointDrive.maximumForce = animatedAttachment.maximumForce;
-                        jointDrive.positionDamper = animatedAttachment.positionDamper;
-                        jointDrive.positionSpring = animatedAttachment.positionSpring;
+            /* Move the attached part by updating the connectedAnchor instead of the joint.targetPosition.
+                * This is easier since the anchor is in the reference frame of this part, and we already have the
+                * position in that reference frame. It also makes sense from the view that since it really is the 
+                * attachment point of the attached part that is moving. There might be benefits of using the targetPosition
+                * though, and should be possible to calculate it fairly easily if needed.
+                */
+            joint.connectedAnchor = referencePosRot.position;
 
-                        // Same drive in all directions.. is there benefits of separating them?
-                        joint.angularXDrive = jointDrive;
-                        joint.angularYZDrive = jointDrive;
-                        joint.xDrive = jointDrive;
-                        joint.yDrive = jointDrive;
-                        joint.zDrive = jointDrive;
-                        //}
-                        if (debug)
-                            printf("%s", joint);
-                        if (debug)
-                            printf("%s", attachedPartPosRot);
-                        if (debug)
-                            printf("%s", attachedPartOriginal);
+            // Make sure the target position is zero
+            joint.targetPosition = Vector3.zero;
 
-                        // Update the joint.targetRotation using this convenience function, since the joint
-                        // reference frame has weird axes. Arguments are current and original rotation.
-                        joint.SetTargetRotationLocal(
-                            attachedPartPosRot.rotation,
-                            attachedPartOriginal.rotation);
+            // This scaling and rotation is to convert to joint space... maybe? 
+            // Determined by random tinkering and is magical as far as I am concerned
+            joint.anchor = attachedPartOffset.rotation.Inverse() *
+                Vector3.Scale(
+                    new Vector3(-1, -1, -1),
+                    attachedPartOffset.position);
 
-                        /* Move the attached part by updating the connectedAnchor instead of the joint.targetPosition.
-                         * This is easier since the anchor is in the reference frame of this part, and we already have the
-                         * position in that reference frame. It also makes sense from the view that since it really is the 
-                         * attachment point of the attached part that is moving. There might be benefits of using the targetPosition
-                         * though, and should be possible to calculate it fairly easily if needed.
-                         */
-                        joint.connectedAnchor = referencePosRot.position;
+            if (debugPeriodic)
+                printf("%s; %s; %s -> %s; %s -> %s; %s",
+                    referencePosRot,
+                    attachedPartPosRot,
+                    attachedPartOffset,
+                    attachedPartOriginal.rotation.eulerAngles,
+                    joint.targetRotation.eulerAngles,
+                    joint.anchor,
+                    joint.connectedAnchor
+                    );
 
-                        // Make sure the target position is zero
-                        joint.targetPosition = Vector3.zero;
+            // Debug info
+            if (debug)
+            {
+                // Show debug vectors for the child part
+                if (axisJoint == null)
+                    axisJoint = new AxisInfo(joint.transform);
 
-                        // This scaling and rotation is to convert to joint space... maybe? 
-                        // Determined by random tinkering and is magical as far as I am concerned
-                        joint.anchor = attachedPartOffset.rotation.Inverse() *
-                            Vector3.Scale(
-                                new Vector3(-1, -1, -1),
-                                attachedPartOffset.position);
+                if (lineAnchor == null)
+                    lineAnchor = new LineInfo(animatedAttachment.part.transform, Color.cyan);
+                lineAnchor.Update(Vector3.zero, joint.connectedAnchor);
 
-                        if (debugPeriodic)
-                            printf("%s; %s; %s -> %s; %s -> %s; %s",
-                                referencePosRot,
-                                attachedPartPosRot,
-                                attachedPartOffset,
-                                attachedPartOriginal.rotation.eulerAngles,
-                                joint.targetRotation.eulerAngles,
-                                joint.anchor,
-                                joint.connectedAnchor
-                                );
-
-                        // Debug info
-                        if (debug)
-                        {
-                            // Show debug vectors for the child part
-                            if (axisJoint == null)
-                                axisJoint = new AxisInfo(joint.transform);
-
-                            if (lineAnchor == null)
-                                lineAnchor = new LineInfo(animatedAttachment.part.transform, Color.cyan);
-                            lineAnchor.Update(Vector3.zero, joint.connectedAnchor);
-
-                            if (lineNodeToPart == null)
-                                lineNodeToPart = new LineInfo(animatedAttachment.part.transform, Color.magenta);
-                            lineNodeToPart.Update(
-                                referencePosRot.position,
-                                attachedPartPosRot.position);
-                        }
-                        else
-                        {
-                            if (axisJoint != null)
-                                axisJoint = null;
-                        }
-                    }
-                    break;
+                if (lineNodeToPart == null)
+                    lineNodeToPart = new LineInfo(animatedAttachment.part.transform, Color.magenta);
+                lineNodeToPart.Update(
+                    referencePosRot.position,
+                    attachedPartPosRot.position);
+            }
+            else
+            {
+                if (axisJoint != null)
+                    axisJoint = null;
             }
 
             // Debug info
