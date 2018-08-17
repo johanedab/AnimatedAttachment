@@ -42,6 +42,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
     // Opotionally show unit vectors of the axes for debugging purposes
     private AxisInfo axisWorld;
     private AxisInfo axisAttachNode;
+    private bool initJointDrive;
 
     // Contains info for all the attached sub parts
     List<AttachedPartInfo> attachedPartInfos;
@@ -62,6 +63,12 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
     private void FixedUpdate()
     {
+        if (debug)
+        {
+            initJointDrive = true;
+            debug = false;
+        }
+
         bool debugLog = debug && ((debugCounter++ % 100) == 0);
 
         UpdateAttachments(attachedPartInfos, debugLog);
@@ -118,8 +125,8 @@ public class AnimatedAttachment : PartModule, IJointLockState
         public AxisInfo axisJoint;
 
         private AnimatedAttachment animatedAttachment;
-        private JointDrive jointDrive;
         internal bool loaded;
+        private JointDrive jointDrive;
 
         public AttachedPartInfo(AnimatedAttachment animatedAttachment, Part attachedPart)
         {
@@ -373,38 +380,63 @@ public class AnimatedAttachment : PartModule, IJointLockState
 
             // It is not possible to change values of a JointDrive after creation, so we must create a 
             // new one and apply it to the joint. Seems we can't only create it at startup either. 
-            /*
-            if (!jointDriveInitialized)
+            switch (joint.name)
             {
-                jointDriveInitialized = true;
-                printff("Creating a new drive mode");
+                case "AnimatedAttachment":
+                    if(joint.xMotion != ConfigurableJointMotion.Free && flightState == State.STARTED)
+                        animatedAttachment.initJointDrive = true;
+                    break;
+                case "MechanicsToolkit":
+                    break;
+                default:
+                    animatedAttachment.initJointDrive = true;
+                    break;
+            }
+
+            if (animatedAttachment.initJointDrive)
+            {
+                animatedAttachment.initJointDrive = false;
+                joint.name = "AnimatedAttachment";
+
+                jointDrive = new JointDrive();
+                printf("Creating a new drive mode. Previous: %s, %s, %s, %s, %s",
+                    joint.name,
+                    joint.xDrive.positionSpring,
+                    animatedAttachment.part.name,
+                    animatedAttachment.part.started,
+                    joint.angularXMotion);
+
+                /*
                 printf(string.Format("maximumForce: {0}", animatedAttachment.maximumForce));
                 printf(string.Format("positionDamper: {0}", animatedAttachment.positionDamper));
                 printf(string.Format("positionSpring: {0}", animatedAttachment.positionSpring));
                 */
-            // The joint will not respond to changes to targetRotation/Position in locked mode,
-            // so change it to free in all directions
-            joint.xMotion = ConfigurableJointMotion.Free;
-            joint.yMotion = ConfigurableJointMotion.Free;
-            joint.zMotion = ConfigurableJointMotion.Free;
-            joint.angularXMotion = ConfigurableJointMotion.Free;
-            joint.angularYMotion = ConfigurableJointMotion.Free;
-            joint.angularZMotion = ConfigurableJointMotion.Free;
 
-            // Create a new joint with settings from the cfg file or user selection
-            jointDrive.maximumForce = animatedAttachment.maximumForce;
-            jointDrive.positionDamper = animatedAttachment.positionDamper;
-            jointDrive.positionSpring = animatedAttachment.positionSpring;
+                // The joint will not respond to changes to targetRotation/Position in locked mode,
+                // so change it to free in all directions
+                joint.xMotion = ConfigurableJointMotion.Free;
+                joint.yMotion = ConfigurableJointMotion.Free;
+                joint.zMotion = ConfigurableJointMotion.Free;
+                joint.angularXMotion = ConfigurableJointMotion.Free;
+                joint.angularYMotion = ConfigurableJointMotion.Free;
+                joint.angularZMotion = ConfigurableJointMotion.Free;
 
-            // Same drive in all directions.. is there benefits of separating them?
-            joint.angularXDrive = jointDrive;
-            joint.angularYZDrive = jointDrive;
-            joint.xDrive = jointDrive;
-            joint.yDrive = jointDrive;
-            joint.zDrive = jointDrive;
-            //}
-            if (debug)
-                printf("%s", joint);
+                // Create a new joint with settings from the cfg file or user selection
+                jointDrive.maximumForce = animatedAttachment.maximumForce;
+                jointDrive.positionDamper = animatedAttachment.positionDamper;
+                jointDrive.positionSpring = animatedAttachment.positionSpring;
+
+                // Same drive in all directions.. is there benefits of separating them?
+                joint.angularXDrive = jointDrive;
+                joint.angularYZDrive = jointDrive;
+                joint.xDrive = jointDrive;
+                joint.yDrive = jointDrive;
+                joint.zDrive = jointDrive;
+                //}
+                if (debug)
+                    printf("%s", joint);
+            }
+
             if (debug)
                 printf("%s", attachedPartPosRot);
             if (debug)
@@ -666,6 +698,8 @@ public class AnimatedAttachment : PartModule, IJointLockState
     {
         base.OnStart(state);
 
+        printf("OnStart");
+
         RemoveNoAttach();
 
         InitAttachNodeLists();
@@ -699,7 +733,11 @@ public class AnimatedAttachment : PartModule, IJointLockState
     {
         base.OnStartFinished(state);
 
+        printf("OnStartFinished");
+
         flightState = State.STARTED;
+        //initJointDrive = true;
+        //UpdateAttachments(attachedPartInfos, true);
     }
 
     private void Save(ConfigNode node, List<AttachedPartInfo> attachNodeInfos)
