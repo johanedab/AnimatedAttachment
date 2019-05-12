@@ -1,6 +1,7 @@
 ﻿using ModuleWheels;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Xml;
 using UnityEngine;
 using VectorHelpers;
@@ -698,7 +699,7 @@ public class AnimatedAttachment : PartModule, IJointLockState
     {
         base.OnStart(state);
 
-        printf("OnStart");
+        printf("*** AnimatedAttachement_v{0}:LoadConfig ***", Assembly.GetExecutingAssembly().GetName().Version);
 
         RemoveNoAttach();
 

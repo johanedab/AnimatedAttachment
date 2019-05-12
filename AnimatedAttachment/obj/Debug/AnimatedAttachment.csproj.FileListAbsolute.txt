@@ -9,3 +9,12 @@ C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment
 C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
 C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
 C:\Users\Stefan\Dropbox (INCELL International)\Private\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
+D:\Dropbox (Personal)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csprojResolveAssemblyReference.cache
+D:\Dropbox (Personal)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
+D:\Dropbox (Personal)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CopyComplete
+D:\Dropbox (Personal)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
+D:\Dropbox (Personal)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
+C:\Users\Stefan\Dropbox (Personlig)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csprojResolveAssemblyReference.cache
+C:\Users\Stefan\Dropbox (Personlig)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.csproj.CoreCompileInputs.cache
+C:\Users\Stefan\Dropbox (Personlig)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.dll
+C:\Users\Stefan\Dropbox (Personlig)\KSP\VC\AnimatedAttachment\AnimatedAttachment\obj\Debug\AnimatedAttachment.pdb
