@@ -699,7 +699,8 @@ public class AnimatedAttachment : PartModule, IJointLockState
     {
         base.OnStart(state);
 
-        printf("*** AnimatedAttachement_v{0}:LoadConfig ***", Assembly.GetExecutingAssembly().GetName().Version);
+        printf("*** AnimatedAttachement_v{0}:LoadConfig ***", 
+            Assembly.GetExecutingAssembly().GetName().Version);
 
         RemoveNoAttach();
 
